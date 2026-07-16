@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>株式会社 里中電気 新社屋（plan6）｜3Dパース</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#bcd8ee;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;}
+  #app{position:fixed;inset:0;}
+  canvas{display:block;}
+  .ui{position:fixed;z-index:10;user-select:none;}
+  #title{top:22px;left:26px;color:#2b3440;transition:color .8s;}
+  body.night #title{color:#e8f0f8;}
+  #title h1{margin:0;font-size:21px;letter-spacing:.1em;font-weight:700;}
+  #title p{margin:4px 0 0;font-size:11px;letter-spacing:.18em;opacity:.75;}
+  #hint{bottom:18px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.15em;color:#4a5a6a;background:rgba(255,255,255,.55);padding:6px 14px;border-radius:14px;backdrop-filter:blur(4px);}
+  .btn-group{display:flex;border-radius:22px;overflow:hidden;box-shadow:0 4px 14px rgba(20,40,60,.25);}
+  .btn-group button{border:0;padding:10px 16px;font-size:13px;letter-spacing:.06em;cursor:pointer;font-family:inherit;background:#fff;color:#5a6a7a;transition:background .3s,color .3s;}
+  .btn-group button.active{background:#2b3f55;color:#fff;}
+  #daynight{bottom:22px;right:26px;}
+  #roofui{bottom:22px;right:170px;}
+  #modeui{bottom:22px;right:352px;}
+  @media (max-width:900px){
+    #modeui{bottom:70px;right:26px;}
+    #roofui{right:150px;}
+    #title h1{font-size:15px}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="ui" id="title">
+  <h1>株式会社 里中電気　新社屋</h1>
+  <p>SATONAKA DENKI NEW OFFICE ｜ plan6 平面図より作成・3Dパース（色は仮）</p>
+</div>
+<div class="ui" id="hint">ドラッグで回転 ／ ホイールでズーム ／ 2Fの大型スクリーンで動画再生中</div>
+<div class="ui btn-group" id="modeui">
+  <button id="btn-whole" class="active">外観</button>
+  <button id="btn-explode">フロア分解</button>
+</div>
+<div class="ui btn-group" id="roofui">
+  <button id="btn-roofoff" class="active">屋根なし</button>
+  <button id="btn-roofon">屋根あり</button>
+</div>
+<div class="ui btn-group" id="daynight">
+  <button id="btn-day" class="active">☀ 昼</button>
+  <button id="btn-night">🌙 夜</button>
+</div>
+
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.160.0';
+import {OrbitControls} from 'https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+/* ============ 基本セットアップ ============ */
+const app=document.getElementById('app');
+const scene=new THREE.Scene();
+const SKY_D=new THREE.Color(0xbcd8ee), SKY_N=new THREE.Color(0x0d1524);
+scene.background=SKY_D.clone();
+scene.fog=new THREE.Fog(SKY_D.clone(),90,320);
+
+const camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.1,900);
+camera.position.set(23,11,17);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+app.appendChild(renderer.domElement);
+
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.target.set(0,3.4,0);
+controls.enableDamping=true;
+controls.dampingFactor=.06;
+controls.autoRotate=true;
+controls.autoRotateSpeed=.5;
+controls.minDistance=7;
+controls.maxDistance=80;
+controls.maxPolarAngle=Math.PI/2-.04;
+let idleTimer=null;
+controls.addEventListener('start',()=>{controls.autoRotate=false;clearTimeout(idleTimer);});
+controls.addEventListener('end',()=>{clearTimeout(idleTimer);idleTimer=setTimeout(()=>controls.autoRotate=true,7000);});
+
+const hemi=new THREE.HemisphereLight(0xdcebff,0x9aa08e,.95);scene.add(hemi);
+const amb=new THREE.AmbientLight(0xdfe8f0,.34);scene.add(amb);
+const sun=new THREE.DirectionalLight(0xfff2da,1.5);
+sun.position.set(25,32,18);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.far=130;
+sun.shadow.camera.left=-35;sun.shadow.camera.right=35;
+sun.shadow.camera.top=45;sun.shadow.camera.bottom=-30;
+sun.shadow.bias=-4e-4;
+scene.add(sun);
+
+/* ============ ヘルパー ============ */
+const M=o=>new THREE.MeshStandardMaterial(o);
+function mesh(geo,mat,x=0,y=0,z=0,parent=scene){
+  const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);
+  m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;
+}
+const B=(w,h,d)=>new THREE.BoxGeometry(w,h,d);
+function tex(c){const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
+
+/* 図面座標系(平面図: x=右, z=下=南) → モデル座標 */
+const OX=-5.0, OZ=-5.5;
+const P=(px,pz)=>[px+OX,pz+OZ];
+/* 斜め壁: E(0,4.55)→D(7.28,10.92) 方向ベクトル */
+const DIAG_ANG=-Math.atan2(6.37,7.28);           // 回転角
+const DU={x:7.28/9.673,z:6.37/9.673};            // 斜め方向 単位ベクトル
+const DN={x:6.37/9.673,z:-7.28/9.673};           // 内側(北東)法線
+const DP=(t,d)=>P(0+DU.x*t+DN.x*d, 4.55+DU.z*t+DN.z*d); // 斜め座標→モデル
+
+/* ============ フロア分解用トレイ ============ */
+const t1=new THREE.Group();scene.add(t1);        // 1F(躯体1F+内装)
+const t2=new THREE.Group();scene.add(t2);        // 2F(スラブ+内装+パラペット)
+const tR=new THREE.Group();scene.add(tR);        // 屋根
+
+/* ============ マテリアル（仮色） ============ */
+const wallOut =M({color:0xeef0ea,roughness:.85});
+const wallIn  =M({color:0xf5f4ef,roughness:.9});
+const navy    =M({color:0x2b3a55,roughness:.6});
+const bandMat =M({color:0x3a4048,roughness:.6,metalness:.2});
+const glassMat=M({color:0x84b8d2,roughness:.08,metalness:.25,transparent:true,opacity:.55,side:THREE.DoubleSide});
+const frameMat=M({color:0xd9dbd7,roughness:.6});
+const floorWork=M({color:0xc9cdd0,roughness:.95});
+const floorEnt=M({color:0xd8d2c2,roughness:.85});
+const floorOfc=M({color:0xa8b4bd,roughness:.95,side:THREE.DoubleSide});
+const deckMat =M({color:0xb9a98c,roughness:.9});
+const woodMat =M({color:0xc09a6a,roughness:.8});
+const darkMat =M({color:0x3a4048,roughness:.7});
+const counterMat=M({color:0xe8e2d5,roughness:.7});
+const trunkMat=M({color:0x8a5a38,roughness:.95});
+const leafMats=[M({color:0x58a84e,roughness:.9,flatShading:true}),M({color:0x6cbf58,roughness:.9,flatShading:true}),M({color:0x4c9a45,roughness:.9,flatShading:true})];
+const skinMat=M({color:0xe8bc98,roughness:.8});
+const shirtCols=[0x4a7fb5,0xc25545,0xe8b13f,0x5f9e6e,0x8468a8,0x3a4048,0xd8dfe6];
+const pantsMat=M({color:0x39414c,roughness:.85});
+const inLights=[];
+
+/* ============ ロゴ（添付ロゴ再現: Xマーク+社名） ============ */
+function drawMark(x,cx,cy,s){
+  x.fillStyle=x.strokeStyle='#15181c';
+  x.lineCap='butt';
+  const w=s*.17;
+  x.lineWidth=w;
+  x.beginPath();x.moveTo(cx+s*.12,cy+s*.10);x.lineTo(cx+s*.88,cy+s*.90);x.stroke();
+  x.beginPath();x.moveTo(cx+s*.88,cy+s*.10);x.lineTo(cx+s*.12,cy+s*.90);x.stroke();
+  x.lineWidth=s*.07;
+  x.beginPath();
+  x.moveTo(cx+s*.05,cy+s*.56);
+  x.lineTo(cx+s*.05,cy+s*.93);
+  x.lineTo(cx+s*.44,cy+s*.93);
+  x.closePath();x.stroke();
+}
+function logoTexH(){ // 横長: マーク+株式会社/里中電気
+  const c=document.createElement('canvas');c.width=1024;c.height=300;
+  const x=c.getContext('2d');
+  x.fillStyle='#f8f8f6';x.fillRect(0,0,1024,300);
+  drawMark(x,30,25,250);
+  x.fillStyle='#15181c';x.textAlign='left';
+  x.font='500 58px "Yu Gothic",sans-serif';
+  x.fillText('株式会社',330,95);
+  x.font='700 132px "Yu Gothic",sans-serif';
+  x.fillText('里中電気',325,235);
+  return tex(c);
+}
+function logoTexV(){ // 縦長(ポールサイン)
+  const c=document.createElement('canvas');c.width=256;c.height=1024;
+  const x=c.getContext('2d');
+  x.fillStyle='#f8f8f6';x.fillRect(0,0,256,1024);
+  drawMark(x,33,20,190);
+  x.fillStyle='#15181c';x.textAlign='center';
+  x.font='700 148px "Yu Gothic",sans-serif';
+  '里中電気'.split('').forEach((ch,i)=>x.fillText(ch,128,360+i*168));
+  return tex(c);
+}
+const logoMatH=M({map:logoTexH(),roughness:.7});
+
+/* ============ 地面・道路・駐車場 ============ */
+const ground=mesh(new THREE.PlaneGeometry(600,600),M({color:0xb7bcb5,roughness:1}),0,0,0);
+ground.rotation.x=-Math.PI/2;ground.castShadow=false;
+function flat(w,d,x,z,mat,y=.03,parent=scene){
+  const p=mesh(new THREE.PlaneGeometry(w,d),mat,x,y,z,parent);
+  p.rotation.x=-Math.PI/2;p.castShadow=false;return p;
+}
+const asphalt=M({color:0x8b8f94,roughness:.95});
+const roadMat=M({color:0x54585e,roughness:.95});
+flat(26,22,6,-1,asphalt,.02);
+flat(300,7,0,-13.5,roadMat);
+flat(7,300,21.5,0,roadMat);
+const lineMat=M({color:0xe8ecef,roughness:.9});
+for(let i=0;i<14;i++){flat(3,.25,-90+i*14,-13.5,lineMat,.05);}
+for(let i=0;i<14;i++){flat(.25,3,21.5,-90+i*14,lineMat,.05);}
+for(let i=0;i<5;i++)flat(.15,5.4,8.4+i*2.6,2.2,lineMat,.05);
+for(let i=0;i<4;i++)flat(2.45,.15,9.7+i*2.6,-.45,lineMat,.05);
+
+/* ============ 躯体パラメータ ============ */
+const FT=.4, H1=4.0, SL=.35, F2=FT+H1, H2=2.9, TOP=F2+H2, PAR=.7;
+/* 平面: 北西に910の切欠きあり */
+const FP=[[0,.91],[3.64,.91],[3.64,0],[10.01,0],[10.01,10.92],[7.28,10.92],[0,4.55]];
+function footShape(inset=0){
+  const cx=5.2,cz=4.9;
+  const s=new THREE.Shape();
+  FP.forEach((p,i)=>{
+    let px=p[0],pz=p[1];
+    if(inset){const dx=cx-px,dz=cz-pz,L=Math.hypot(dx,dz);px+=dx/L*inset;pz+=dz/L*inset;}
+    const [mx,mz]=P(px,pz);
+    i?s.lineTo(mx,mz):s.moveTo(mx,mz);
+  });
+  s.closePath();return s;
+}
+const STAIR_HOLE=[5.5,.5,7.25,2.55]; // 2F吹抜け(階段室 上部)
+function holed(s){
+  const h=new THREE.Path();
+  const[a,b,c,d]=STAIR_HOLE;
+  h.moveTo(a+OX,b+OZ);h.lineTo(c+OX,b+OZ);h.lineTo(c+OX,d+OZ);h.lineTo(a+OX,d+OZ);h.closePath();
+  s.holes.push(h);return s;
+}
+function slabGeo(shape,y,thk){
+  const g=new THREE.ExtrudeGeometry(shape,{depth:thk,bevelEnabled:false});
+  g.rotateX(Math.PI/2);g.translate(0,y+thk,0);return g;
+}
+/* 1F土間 */
+{
+  const m=new THREE.Mesh(slabGeo(footShape(),0,FT),M({color:0xb0b2ae,roughness:.95}));
+  m.castShadow=m.receiveShadow=true;t1.add(m);
+}
+/* 2Fスラブ(階段開口) */
+{
+  const m=new THREE.Mesh(slabGeo(holed(footShape()),F2-SL,SL),bandMat);
+  m.castShadow=m.receiveShadow=true;t2.add(m);
+}
+/* 1F天井(2Fスラブ下面) */
+{
+  const g=new THREE.ShapeGeometry(holed(footShape(.15)));
+  g.rotateX(Math.PI/2);g.translate(0,F2-SL-.01,0);
+  const m=new THREE.Mesh(g,M({color:0xf4f3ee,roughness:.9,side:THREE.DoubleSide}));
+  m.receiveShadow=true;t2.add(m);
+}
+/* 2F床仕上げ */
+{
+  const g=new THREE.ShapeGeometry(holed(footShape(.18)));
+  g.rotateX(Math.PI/2);g.translate(0,F2+.01,0);
+  const m=new THREE.Mesh(g,floorOfc);m.receiveShadow=true;t2.add(m);
+}
+
+/* 壁ヘルパー(図面座標・任意方向) */
+function wall(px0,pz0,px1,pz1,y0,h,mat=wallIn,thk=.16,parent=t1){
+  const [x0,z0]=P(px0,pz0),[x1,z1]=P(px1,pz1);
+  const len=Math.hypot(x1-x0,z1-z0);
+  const m=mesh(B(len,h,thk),mat,(x0+x1)/2,y0+h/2,(z0+z1)/2,parent);
+  m.rotation.y=-Math.atan2(z1-z0,x1-x0);
+  return m;
+}
+function winPane(px,pz,y,w,h,ry=0,parent=t1,hood=0){
+  const [x,z]=P(px,pz);
+  const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=ry;parent.add(g);
+  mesh(B(w,h,.26),frameMat,0,0,0,g).castShadow=false;
+  const gl=mesh(B(w-.12,h-.12,.24),glassMat,0,0,0,g);gl.castShadow=false;
+  mesh(B(.05,h-.12,.27),bandMat,0,0,0,g).castShadow=false;
+  if(hood)mesh(B(w+.18,.14,.28),frameMat,0,h/2+.1,hood*.2,g); // 水切り庇
+  return g;
+}
+
+/* ============ 外壁(斜め面は開放カットアウェイ) ============ */
+const EXT1=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[3.64,0,10.01,0],[10.01,0,10.01,10.92],[7.28,10.92,10.01,10.92],[0,.91,0,4.55]];
+EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,H1,wallOut,.2,t1));
+/* 2F: バルコニーも立面図どおり壁で囲う(東面に窓開口) */
+const EXT2=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[3.64,0,10.01,0],[10.01,0,10.01,10.92],[7.28,10.92,10.01,10.92],[0,.91,0,4.55]];
+EXT2.forEach(s=>wall(s[0],s[1],s[2],s[3],F2,H2+PAR,wallOut,.2,t2));
+/* 幅木(外周ベース・濃色) */
+EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,.24,bandMat,.26,t1));
+/* 斜め面の見切り・柱 */
+{
+  const [dx0,dz0]=P(0,4.55),[dx1,dz1]=P(7.28,10.92);
+  const len=Math.hypot(dx1-dx0,dz1-dz0);
+  const mk=(y,h,parent)=>{
+    const b=mesh(B(len,h,.22),bandMat,(dx0+dx1)/2,y,(dz0+dz1)/2,parent);
+    b.rotation.y=DIAG_ANG;return b;
+  };
+  mk(FT/2,FT,t1);
+  mk(F2-SL/2,SL+.1,t2);
+  mk(TOP+PAR/2,PAR,t2);
+  for(let i=1;i<4;i++){
+    const t=i/4;
+    mesh(B(.24,H1,.24),M({color:0xdcddd6,roughness:.8}),dx0+(dx1-dx0)*t,FT+H1/2,dz0+(dz1-dz0)*t,t1);
+    mesh(B(.24,H2,.24),M({color:0xdcddd6,roughness:.8}),dx0+(dx1-dx0)*t,F2+H2/2,dz0+(dz1-dz0)*t,t2);
+  }
+}
+/* ===== 窓(立面図準拠) ===== */
+/* 手前(z=0/0.91)面: 引違い窓 上下2組(水切り庇付き) */
+winPane(2.3,.91,FT+1.4,1.2,1.4,0,t1,-1);            // 1F トイレ・洗面側
+winPane(4.9,0,FT+1.4,1.2,1.4,0,t1,-1);              // 1F 階段室
+winPane(2.3,.91,F2+.95,1.2,1.2,0,t2,-1);            // 2F 給湯室
+winPane(4.9,0,F2+.95,1.2,1.2,0,t2,-1);              // 2F トイレ
+/* 西面: 勝手口ドア + 面格子窓 + 横スリット(立面図準拠) */
+{
+  const WWX=P(0,0)[0]-.11;
+  const dz=P(0,2.6)[1];
+  const dg=new THREE.Group();dg.position.set(WWX,0,dz);dg.rotation.y=-Math.PI/2;t1.add(dg);
+  mesh(B(1.0,2.15,.06),bandMat,0,FT+1.1,0,dg).castShadow=false;       // 勝手口枠
+  mesh(B(.86,2.05,.08),M({color:0xcfd4d8,roughness:.5,metalness:.3}),0,FT+1.1,.03,dg);
+  const dgl=mesh(B(.6,.9,.1),glassMat,0,FT+1.55,.03,dg);dgl.castShadow=false;
+  /* 面格子窓 */
+  const lg=new THREE.Group();lg.position.set(WWX,FT+1.55,P(0,3.75)[1]);lg.rotation.y=-Math.PI/2;t1.add(lg);
+  mesh(B(.8,.95,.08),frameMat,0,0,.02,lg).castShadow=false;
+  const lgl=mesh(B(.68,.83,.1),glassMat,0,0,.02,lg);lgl.castShadow=false;
+  for(let i=0;i<5;i++)mesh(B(.05,.95,.04),bandMat,-.32+i*.16,0,-.06,lg).castShadow=false;
+  for(let i=0;i<3;i++)mesh(B(.8,.05,.04),bandMat,0,-.3+i*.3,-.07,lg).castShadow=false;
+  /* 横スリット(勝手口上) */
+  winPane(0,2.75,FT+2.9,1.3,.5,Math.PI/2,t1,-1);
+}
+/* ===== 東面ファサード(正面): 倉庫大開口・縦格子エントランス ===== */
+const EWX=P(10.01,0)[0]+.11;            // 東壁 外面x
+/* 倉庫: 4枚建てガラス大開口 + 欄間(立面図準拠) */
+{
+  const [x,z]=P(10.01,2.3);
+  const g=new THREE.Group();g.position.set(EWX,0,z);g.rotation.y=Math.PI/2;t1.add(g);
+  mesh(B(3.3,3.0,.1),bandMat,0,FT+1.6,0,g).castShadow=false;          // 外枠
+  const gl=mesh(B(3.14,2.5,.12),glassMat,0,FT+1.35,0,g);gl.castShadow=false;
+  for(let i=1;i<4;i++)mesh(B(.06,2.5,.14),bandMat,-1.57+i*.785,FT+1.35,0,g).castShadow=false;
+  mesh(B(3.14,.06,.14),bandMat,0,FT+2.62,0,g).castShadow=false;
+  const rm=mesh(B(3.14,.6,.12),glassMat,0,FT+2.96,0,g);rm.castShadow=false; // 欄間(2枚)
+  mesh(B(.06,.6,.14),bandMat,0,FT+2.96,0,g).castShadow=false;
+  /* 土間前のスロープ */
+  const sl=mesh(B(.9,.08,3.4),M({color:0xb9bdc1,roughness:.9}),EWX+.5,.2,z,t1);
+  sl.rotation.z=-.16;sl.castShadow=false;
+}
+/* (東1Fの窓は大開口とドア・スリットのみ=立面図準拠) */
+/* 東2F: 横連窓(4分割・水切り付き)+正方形窓+バルコニー窓(立面図準拠) */
+{
+  const [x,z]=P(10.01,2.35);
+  const g=new THREE.Group();g.position.set(P(10.01,0)[0],F2+1.0,z);g.rotation.y=Math.PI/2;t2.add(g);
+  mesh(B(3.4,1.05,.1),frameMat,0,0,0,g).castShadow=false;
+  const gl=mesh(B(3.28,.93,.12),glassMat,0,0,0,g);gl.castShadow=false;
+  for(let i=1;i<4;i++)mesh(B(.05,.93,.13),bandMat,-1.7+i*.85,0,0,g).castShadow=false;
+  mesh(B(3.58,.14,.28),frameMat,0,.62,.12,g);        // 水切り
+}
+winPane(10.01,5.85,F2+1.0,1.1,1.1,Math.PI/2,t2,1);   // 2F 正方形窓
+winPane(10.01,9.1,F2+1.15,1.6,1.1,Math.PI/2,t2,1);   // バルコニー窓
+/* ===== エントランス(東・木縦格子スクリーン+木格子ドア+庇) ===== */
+{
+  const woodSlat=M({color:0x9a6b40,roughness:.75});
+  const slat=(pz)=>{
+    const s=mesh(B(.07,H1-.15,.09),woodSlat,EWX+.10,FT+(H1-.15)/2,P(10.01,pz)[1],t1);
+    s.castShadow=false;return s;
+  };
+  /* 格子帯(窓・ドアを避けて3帯) */
+  [[5.95,6.38],[7.68,8.14],[10.05,10.6]].forEach(([a,b])=>{
+    for(let pz=a;pz<=b+.01;pz+=.16)slat(pz);
+  });
+  /* 木格子ドア(立面図: 縦板+筋交い) z6.5-7.5 */
+  const dz=P(10.01,7.0)[1];
+  const dg=new THREE.Group();dg.position.set(EWX+.02,0,dz);dg.rotation.y=Math.PI/2;t1.add(dg);
+  mesh(B(1.2,2.5,.06),bandMat,0,FT+1.28,0,dg).castShadow=false;        // 開口枠
+  const dr=mesh(B(1.0,2.4,.09),M({color:0x7a5231,roughness:.7}),0,FT+1.25,.03,dg);
+  for(let i=0;i<5;i++)mesh(B(.1,2.34,.05),woodSlat,-.4+i*.2,FT+1.25,.09,dg).castShadow=false;
+  mesh(B(.05,.9,.07),M({color:0xd8dcdf,roughness:.3,metalness:.7}),.42,FT+1.25,.13,dg).castShadow=false; // ハンドル
+  /* ドア上の横スリット + エントランス南側の横スリット(立面図) */
+  winPane(10.01,7.0,FT+3.15,1.35,.55,Math.PI/2,t1,1);
+  winPane(10.01,9.1,FT+3.15,1.6,.55,Math.PI/2,t1,1);
+  /* 庇(木軒天) */
+  const cv=mesh(B(1.6,.14,2.4),navy,EWX+.8,FT+3.0,dz,t1);
+  const sof=flat(1.5,2.3,EWX+.8,dz,M({color:0x8a5f38,roughness:.8}),0,t1);
+  sof.position.y=FT+2.92;sof.rotation.x=Math.PI/2;
+  /* ロゴ銘板(ドア横) + ポーチ照明 */
+  const lp=mesh(B(.05,.4,1.5),logoMatH,EWX+.13,FT+1.7,P(10.01,8.6)[1],t1);
+  lp.rotation.y=Math.PI/2;lp.castShadow=false;
+  const pl=new THREE.PointLight(0xffe6b8,6,7,2);
+  pl.position.set(EWX+.8,FT+2.6,dz);t1.add(pl);inLights.push(pl);
+  /* アプローチ舗装 + 誘導ライン */
+  flat(3.4,2.2,EWX+2.0,dz,floorEnt,.04);
+  flat(3.4,.12,EWX+2.0,dz+.95,M({color:0xd8c25a,roughness:.8}),.05);
+}
+/* 東面 社名サイン(添付ロゴ・2F壁面) */
+{
+  const sg=mesh(B(4.2,1.05,.12),logoMatH,P(10.01,3.0)[0]+.12,TOP+.38,P(10.01,3.0)[1],t2);
+  sg.rotation.y=Math.PI/2;sg.castShadow=false;
+}
+
+/* ============ 屋根(トグル・片流れ: 東高→西低, バルコニー欠込) ============ */
+{
+  const RFP=[[0,.91],[3.64,.91],[3.64,0],[10.01,0],[10.01,6.37],[8.19,6.37],[8.19,10.92],[7.28,10.92],[0,4.55]];
+  const cx=5.0,cz=4.7,OUT=.3;
+  const s=new THREE.Shape();
+  RFP.forEach((p,i)=>{
+    let px=p[0],pz=p[1];
+    const dx=px-cx,dz=pz-cz,L=Math.hypot(dx,dz);
+    px+=dx/L*OUT;pz+=dz/L*OUT;
+    const [mx,mz]=P(px,pz);
+    i?s.lineTo(mx,mz):s.moveTo(mx,mz);
+  });
+  s.closePath();
+  const g=new THREE.ExtrudeGeometry(s,{depth:.2,bevelEnabled:false});
+  g.rotateX(Math.PI/2);g.translate(0,TOP+.35,0);
+  /* シアーで片流れ勾配(東+xほど高く) */
+  const pos=g.attributes.position;
+  const slope=1.4/10.01;
+  for(let i=0;i<pos.count;i++)pos.setY(i,pos.getY(i)+(pos.getX(i)+5)*slope);
+  g.computeVertexNormals();
+  const m=new THREE.Mesh(g,M({color:0x33383f,roughness:.8}));
+  m.castShadow=m.receiveShadow=true;tR.add(m);
+  /* 屋上設備(勾配に合わせた高さ) */
+  const rY=px=>TOP+.55+(P(px,0)[0]+5)*slope;
+  mesh(B(1.5,.75,.8),M({color:0x9aa0a6,roughness:.7}),P(8.5,1.6)[0],rY(8.5)+.38,P(8.5,1.6)[1],tR);
+  mesh(B(1.0,.65,.7),M({color:0x9aa0a6,roughness:.7}),P(6.2,1.3)[0],rY(6.2)+.33,P(6.2,1.3)[1],tR);
+}
+tR.visible=false;
+/* 雨樋(西=低い側) */
+[[0,1.15],[0,4.35],[3.55,.08]].forEach(([px,pz])=>{
+  const [x,z]=P(px,pz);
+  mesh(new THREE.CylinderGeometry(.045,.045,TOP-.4,8),M({color:0x8b9095,roughness:.6}),x-.14,(TOP-.4)/2+.2,z,t1).castShadow=false;
+});
+/* 室外機(北側) */
+[[6.9,-.42],[8.1,-.42]].forEach(([px,pz])=>{
+  const [x,z]=P(px,pz);
+  const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+  mesh(B(.9,.72,.34),M({color:0xe8eaec,roughness:.6}),0,.4,0,g);
+  const fan=mesh(new THREE.CylinderGeometry(.24,.24,.05,14),M({color:0xc8ccd0,roughness:.5}),-.18,.42,-.17,g);
+  fan.rotation.x=Math.PI/2;fan.castShadow=false;
+});
+
+/* ============ 家具・人ヘルパー ============ */
+function person(parent,x,y,z,ry=0,pose='stand',shirtIdx=0){
+  const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=ry;parent.add(g);
+  const shirt=M({color:shirtCols[shirtIdx%shirtCols.length],roughness:.85});
+  if(pose==='sit'){
+    mesh(B(.3,.5,.2),shirt,0,.72,0,g);
+    mesh(B(.26,.13,.42),pantsMat,0,.42,.14,g);
+    mesh(B(.11,.4,.11),pantsMat,-.08,.18,.3,g);
+    mesh(B(.11,.4,.11),pantsMat,.08,.18,.3,g);
+    mesh(new THREE.SphereGeometry(.14,10,8),skinMat,0,1.12,0,g);
+    mesh(B(.09,.4,.09),shirt,-.2,.7,.06,g);
+    mesh(B(.09,.4,.09),shirt,.2,.7,.06,g);
+  }else{
+    mesh(B(.12,.72,.14),pantsMat,-.08,.36,0,g);
+    mesh(B(.12,.72,.14),pantsMat,.08,.36,0,g);
+    mesh(B(.32,.56,.2),shirt,0,1.0,0,g);
+    mesh(B(.09,.5,.09),shirt,-.21,.98,0,g);
+    mesh(B(.09,.5,.09),shirt,.21,.98,0,g);
+    mesh(new THREE.SphereGeometry(.14,10,8),skinMat,0,1.44,0,g);
+  }
+  return g;
+}
+function chair(parent,x,y,z,ry=0){
+  const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=ry;parent.add(g);
+  mesh(B(.44,.06,.44),darkMat,0,.44,0,g);
+  mesh(B(.44,.5,.05),darkMat,0,.72,-.2,g);
+  [[-.17,-.17],[.17,-.17],[-.17,.17],[.17,.17]].forEach(([ox,oz])=>{
+    mesh(B(.05,.44,.05),darkMat,ox,.22,oz,g);
+  });
+  return g;
+}
+function toiletSet(parent,px,pz,y,ry=0){
+  const [x,z]=P(px,pz);
+  const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=ry;parent.add(g);
+  mesh(B(.42,.42,.6),M({color:0xf8f8f8,roughness:.3}),0,.21,0,g);
+  mesh(B(.42,.7,.18),M({color:0xf8f8f8,roughness:.3}),0,.55,-.25,g);
+  return g;
+}
+function rack(parent,px,pz,ry=0,len=2.4,y=FT){
+  const [x,z]=P(px,pz);
+  const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=ry;parent.add(g);
+  for(let s=0;s<3;s++)mesh(B(len,.05,.6),M({color:0xb8bcbf,roughness:.6}),0,.5+s*.55,0,g);
+  [[-len/2+.05],[len/2-.05]].forEach(([ox])=>{
+    mesh(B(.06,1.8,.06),darkMat,ox,.9,-.27,g);
+    mesh(B(.06,1.8,.06),darkMat,ox,.9,.27,g);
+  });
+  const cols=[0xe8b13f,0x4a7fb5,0xc25545,0x5f9e6e,0xd8dfe6,0x8468a8];
+  for(let s=0;s<3;s++)for(let i=0;i<Math.floor(len/.5);i++){
+    if((s*7+i)%3===0)continue;
+    mesh(B(.38,.3,.4),M({color:cols[(s*5+i)%6],roughness:.8}),-len/2+.3+i*.5,.72+s*.55,0,g);
+  }
+  return g;
+}
+function cableDrum(parent,px,pz,r,col){
+  const [x,z]=P(px,pz);
+  const g=new THREE.Group();g.position.set(x,FT+r,z);g.rotation.z=Math.PI/2;parent.add(g);
+  mesh(new THREE.CylinderGeometry(r,r,.12,16),woodMat,0,.35,0,g);
+  mesh(new THREE.CylinderGeometry(r,r,.12,16),woodMat,0,-.35,0,g);
+  mesh(new THREE.CylinderGeometry(r*.55,r*.55,.62,12),M({color:col,roughness:.7}),0,0,0,g);
+  return g;
+}
+
+/* ============ 1F 内部(平面図準拠) ============ */
+/* --- 間仕切り --- */
+/* トイレ室(x2.73-4.55, z0.91-2.73, 南西角が斜めカット・洗面はその斜め壁) */
+wall(2.73,.91,2.73,2.0,FT,H1);                    // 西
+wall(2.73,2.0,3.46,2.73,FT,H1);                   // 斜めカット
+wall(3.46,2.73,3.62,2.73,FT,H1);                  // 南(ドア開口横)
+wall(4.32,2.73,4.55,2.73,FT,H1);
+wall(4.55,.91,4.55,2.73,FT,H1);                   // 東(階段側)
+/* 物入(トイレ北・切欠き上) */
+mesh(B(.86,2.4,.86),M({color:0xe8e4da,roughness:.8}),P(4.1,.455)[0],FT+1.2,P(4.1,.455)[1],t1);
+/* 階段室東側の物入・靴入(x5.46-5.915) */
+mesh(B(.42,2.3,1.35),M({color:0xe8e4da,roughness:.8}),P(5.69,.7)[0],FT+1.15,P(5.69,.7)[1],t1);
+mesh(B(.42,1.1,.85),woodMat,P(5.69,1.85)[0],FT+.55,P(5.69,1.85)[1],t1); // 靴入
+/* 倉庫(x5.915-10.01, z0-4.095) */
+wall(5.915,0,5.915,3.05,FT,H1);                   // 西(ドア開口 z3.05-3.9)
+wall(5.915,3.9,5.915,4.095,FT,H1);
+wall(5.915,4.095,10.01,4.095,FT,H1);              // 南
+/* エントランスホール(x8.19-10.01, z6.37-10.92) */
+wall(8.19,6.37,8.19,6.75,FT,H1);                  // 西(開口 z6.75-7.75)
+wall(8.19,7.75,8.19,10.92,FT,H1);
+wall(8.19,6.37,10.01,6.37,FT,H1);                 // 北
+/* --- 床仕上げ --- */
+flat(1.7,4.4,P(9.1,8.65)[0],P(9.1,8.65)[1],floorEnt,FT+.02,t1);
+mesh(B(.12,.12,4.4),woodMat,P(8.25,8.65)[0],FT+.06,P(8.25,8.65)[1],t1); // 框
+/* --- トイレ・洗面 --- */
+toiletSet(t1,3.15,1.35,FT,Math.PI/2);
+{ // 洗面(斜め壁沿い)
+  const g=new THREE.Group();const[x,z]=P(3.25,2.5);g.position.set(x,FT,z);g.rotation.y=Math.PI/4;t1.add(g);
+  mesh(B(.8,.85,.45),M({color:0xf0f0ec,roughness:.4}),0,.42,0,g);
+}
+/* 冷蔵庫(トイレ西の凹み) */
+mesh(B(.6,1.7,.62),M({color:0xdfe3e6,roughness:.5}),P(2.4,1.3)[0],FT+.85,P(2.4,1.3)[1],t1);
+/* --- 折返し階段: 1F直進(x4.55-5.46)→北の踊り場→2Fへ(x6.37-7.28) --- */
+const stepMat=M({color:0xd9cba8,roughness:.8});
+for(let i=0;i<7;i++){ // 下り階(南→北)
+  mesh(B(.86,.05,.3),stepMat,P(5.0,2.35)[0],FT+.286*(i+1)-.14,P(5.0,2.35)[1]-i*.24,t1);
+}
+mesh(B(2.6,.16,.9),stepMat,P(5.91,.5)[0],FT+2.0,P(5.91,.5)[1],t1);       // 踊り場
+for(let i=1;i<7;i++){ // 上り階(北→南)
+  mesh(B(.86,.05,.3),stepMat,P(6.83,1.0)[0],FT+2.0+.286*i,P(6.83,1.0)[1]+i*.24,t1);
+}
+wall(6.37,.95,6.37,2.5,FT+1.9,2.1,M({color:0xdfe3e6,roughness:.6}),.08,t1); // 中間手すり壁
+/* --- 倉庫: ラック+ケーブルドラム(中央に棚) --- */
+rack(t1,7.6,1.1,0,2.6);
+rack(t1,9.55,2.2,Math.PI/2,2.4);
+mesh(B(.5,1.5,3.2),M({color:0xd9d4c8,roughness:.8}),P(7.3,2.4)[0],FT+.75,P(7.3,2.4)[1],t1); // 中央棚
+cableDrum(t1,6.8,3.6,.5,0x3a4048);
+cableDrum(t1,8.7,3.5,.38,0x8a5a38);
+person(t1,P(8.6,1.5)[0],FT,P(8.6,1.5)[1],1.9,'stand',2);
+/* --- 作業場兼休憩所: キッチン・ダイニングは斜め壁沿い(45°) --- */
+{
+  /* 斜め壁沿いの腰壁(キッチン背面) */
+  const [bx,bz]=DP(2.0,.14);
+  const bw=mesh(B(3.8,1.15,.14),wallIn,bx,FT+.575,bz,t1);bw.rotation.y=DIAG_ANG;
+  /* L型キッチン(コンロ+シンク) */
+  const [kx,kz]=DP(2.0,.55);
+  const kg=new THREE.Group();kg.position.set(kx,FT,kz);kg.rotation.y=DIAG_ANG;t1.add(kg);
+  mesh(B(3.2,.9,.75),counterMat,0,.45,0,kg);
+  mesh(B(3.24,.06,.79),M({color:0x8a8f94,roughness:.4,metalness:.5}),0,.93,0,kg);
+  mesh(B(.55,.04,.6),M({color:0x2a2e33,roughness:.3}),-1.1,.97,0,kg);   // コンロ
+  mesh(B(.5,.03,.55),M({color:0xdfe5ea,roughness:.3}),.9,.97,0,kg);     // シンク
+  person(kg,-.3,0,.75,Math.PI,'stand',5);                               // キッチンの人
+  /* ダイニングテーブル(2台連結・6席) */
+  const [tx,tz]=DP(2.6,1.75);
+  const tg=new THREE.Group();tg.position.set(tx,FT,tz);tg.rotation.y=DIAG_ANG;t1.add(tg);
+  mesh(B(1.6,.06,1.5),woodMat,0,.72,0,tg);
+  [[-.6,-.7],[-.6,.7],[.6,-.7],[.6,.7]].forEach(([ox,oz])=>{
+    mesh(B(.07,.7,.07),darkMat,ox,.36,oz,tg);
+  });
+  [-0.5,0,0.5].forEach((ox,i)=>{
+    chair(tg,ox,0,-1.05,0);
+    chair(tg,ox,0,1.05,Math.PI);
+    if(i!==1)person(tg,ox,0,-1.05,0,'sit',i+3);
+    if(i!==0)person(tg,ox,0,1.05,Math.PI,'sit',i);
+  });
+  /* 作業台(斜め配置の長机) */
+  const [wx,wz]=DP(5.6,1.35);
+  const wb=new THREE.Group();wb.position.set(wx,FT,wz);wb.rotation.y=DIAG_ANG;t1.add(wb);
+  mesh(B(2.8,.08,.95),M({color:0xd9d4c8,roughness:.7}),0,.85,0,wb);
+  mesh(B(.1,.8,.9),darkMat,-1.25,.42,0,wb);
+  mesh(B(.1,.8,.9),darkMat,1.25,.42,0,wb);
+  mesh(B(.5,.12,.35),M({color:0xc25545,roughness:.7}),-.7,.95,.1,wb);
+  mesh(B(.4,.25,.3),M({color:0xe8b13f,roughness:.7}),.6,1.0,-.1,wb);
+  person(wb,.1,0,.75,Math.PI,'stand',5);
+  /* 脚立 */
+  const lad=new THREE.Group();const[lx,lz]=P(7.0,5.2);lad.position.set(lx,FT,lz);lad.rotation.y=.7;t1.add(lad);
+  const l1=mesh(B(.5,1.8,.06),M({color:0xb8bcbf,roughness:.5,metalness:.4}),0,.9,-.28,lad);l1.rotation.x=.3;
+  const l2=mesh(B(.5,1.8,.06),M({color:0xb8bcbf,roughness:.5,metalness:.4}),0,.9,.28,lad);l2.rotation.x=-.3;
+}
+person(t1,P(9.1,8.4)[0],FT,P(9.1,8.4)[1],-1.6,'stand',0);   // エントランス
+
+/* ============ 2F 内部(平面図準拠) ============ */
+const IH2=H2-.35;
+/* 北側水回り帯: 倉庫(2帖)/給湯室/トイレ/階段室 */
+wall(1.365,.91,1.365,2.73,F2,IH2,wallIn,.16,t2);            // 倉庫/給湯
+wall(3.64,0,3.64,2.73,F2,IH2,wallIn,.16,t2);                // 給湯/トイレ
+wall(5.46,0,5.46,1.82,F2,IH2,wallIn,.16,t2);                // トイレ/階段
+wall(3.64,1.82,4.85,1.82,F2,IH2,wallIn,.16,t2);             // トイレ南(ドア開口x4.85-5.4)
+wall(0,2.73,3.9,2.73,F2,IH2,wallIn,.16,t2);                 // 帯南壁(=スクリーン壁)
+wall(4.5,2.73,4.55,2.73,F2,IH2,wallIn,.16,t2);
+/* ホール/事務所② 斜め壁(ドア開口を挟んで2枚) */
+wall(4.55,2.73,5.5,3.68,F2,IH2,wallIn,.16,t2);
+wall(6.2,4.38,7.28,5.46,F2,IH2,wallIn,.16,t2);
+/* 事務所① 西壁(x7.28) */
+wall(7.28,0,7.28,3.9,F2,IH2,wallIn,.16,t2);
+wall(7.28,4.9,7.28,6.37,F2,IH2,wallIn,.16,t2);
+/* バルコニー境(掃き出し窓) */
+wall(8.19,6.37,8.55,6.37,F2,IH2,wallIn,.16,t2);
+winPane(9.25,6.37,F2+1.2,1.4,2.2,0,t2);
+/* 階段吹抜けの腰壁 */
+wall(5.46,2.55,7.28,2.55,F2,1.0,M({color:0xdfe3e6,roughness:.6}),.1,t2);
+wall(5.46,1.82,5.46,2.55,F2,1.0,M({color:0xdfe3e6,roughness:.6}),.1,t2);
+/* バルコニー(x8.19-10.01, z6.37-10.92) */
+flat(1.6,4.3,P(9.1,8.65)[0],P(9.1,8.65)[1],deckMat,F2+.03,t2);
+wall(8.19,6.37,8.19,10.92,F2,1.15,M({color:0xeef0ea,roughness:.85}),.14,t2); // 西側(内側)は腰壁
+{
+  const [bx,bz]=P(9.1,10.2);
+  mesh(new THREE.CylinderGeometry(.35,.35,.04,12),woodMat,bx,F2+.55,bz,t2);
+  mesh(new THREE.CylinderGeometry(.05,.05,.5,8),darkMat,bx,F2+.28,bz,t2);
+  mesh(new THREE.CylinderGeometry(.2,.16,.3,8),M({color:0xb0714f,roughness:.9}),P(9.6,7.1)[0],F2+.18,P(9.6,7.1)[1],t2);
+  mesh(new THREE.IcosahedronGeometry(.28,0),leafMats[1],P(9.6,7.1)[0],F2+.6,P(9.6,7.1)[1],t2);
+  person(t2,P(9.5,9.3)[0],F2,P(9.5,9.3)[1],.6,'stand',4);
+}
+/* 給湯室: 北壁沿いカウンター+冷 */
+mesh(B(1.7,.85,.6),counterMat,P(2.35,1.25)[0],F2+.42,P(2.35,1.25)[1],t2);
+mesh(B(.4,.03,.4),M({color:0xdfe5ea,roughness:.3}),P(2.7,1.25)[0],F2+.86,P(2.7,1.25)[1],t2);
+mesh(B(.5,1.4,.55),M({color:0xdfe3e6,roughness:.5}),P(3.35,1.25)[0],F2+.7,P(3.35,1.25)[1],t2);
+/* 2F倉庫(2帖)・トイレ */
+rack(t2,0.75,1.9,Math.PI/2,1.4,F2);
+toiletSet(t2,4.4,.6,F2,0);
+mesh(B(.6,.8,.4),M({color:0xf0f0ec,roughness:.4}),P(3.95,1.5)[0],F2+.4,P(3.95,1.5)[1],t2); // 手洗い
+/* 事務所①(x7.28-10.01, z0-6.37): 社長デスク+応接 */
+{
+  mesh(B(1.8,.07,.75),M({color:0x6b4a30,roughness:.6}),P(8.95,1.45)[0],F2+.73,P(8.95,1.45)[1],t2);
+  mesh(B(.5,.5,.5),M({color:0x2a2e33,roughness:.5}),P(9.55,1.45)[0],F2+.35,P(9.55,1.45)[1],t2);
+  mesh(B(.45,.35,.03),darkMat,P(8.7,1.5)[0],F2+1.0,P(8.7,1.5)[1],t2);   // モニター
+  chair(t2,P(8.95,.8)[0],F2,P(8.95,.8)[1],0);
+  person(t2,P(8.95,.8)[0],F2,P(8.95,.8)[1],0,'sit',6);                  // 社長
+  /* 応接: キューブ椅子×2 + テーブル + ソファ */
+  mesh(B(.55,.42,.55),M({color:0x4a4f57,roughness:.9}),P(8.35,2.85)[0],F2+.21,P(8.35,2.85)[1],t2);
+  mesh(B(.55,.42,.55),M({color:0x4a4f57,roughness:.9}),P(9.35,2.85)[0],F2+.21,P(9.35,2.85)[1],t2);
+  mesh(B(1.3,.4,.65),M({color:0xe4ddc8,roughness:.8}),P(8.85,3.6)[0],F2+.2,P(8.85,3.6)[1],t2);
+  mesh(B(1.8,.45,.7),M({color:0xf0ede4,roughness:.9}),P(8.85,5.75)[0],F2+.22,P(8.85,5.75)[1],t2);
+  mesh(B(1.8,.5,.22),M({color:0xf0ede4,roughness:.9}),P(8.85,6.1)[0],F2+.55,P(8.85,6.1)[1],t2);
+  person(t2,P(8.35,2.85)[0],F2,P(8.35,2.85)[1],Math.PI,'sit',1);
+}
+/* 事務所②: 斜め45°のデスク島(6席)+A0プロッター+斜め長机 */
+function ofcDesk(parent,cx,cz,ry,side){ // side:+1/-1 椅子側
+  const g=new THREE.Group();g.position.set(cx,F2,cz);g.rotation.y=ry;parent.add(g);
+  mesh(B(1.3,.06,.65),M({color:0x6b4a30,roughness:.7}),0,.72,0,g);
+  mesh(B(.06,.7,.6),darkMat,-.6,.35,0,g);
+  mesh(B(.06,.7,.6),darkMat,.6,.35,0,g);
+  mesh(B(.42,.3,.04),darkMat,0,1.0,-.15*side,g);
+  const sc=mesh(new THREE.PlaneGeometry(.38,.24),M({color:0x9fd6e8,emissive:0x5aa8c8,emissiveIntensity:.6}),0,1.0,-.11*side,g);
+  sc.castShadow=false;sc.rotation.y=side<0?Math.PI:0;
+  return g;
+}
+{
+  const CI=DP(0,0); // ダミー
+  const island=[[-1.35,-.38,1],[0,-.38,1],[1.35,-.38,1],[-1.35,.38,-1],[0,.38,-1],[1.35,.38,-1]];
+  island.forEach(([du,dn,side],i)=>{
+    const t0=3.6+du, d0=2.05+dn*1;
+    const [x,z]=DP(t0,d0);
+    ofcDesk(t2,x,z,DIAG_ANG,side);
+    const [px,pz]=DP(t0,d0+side*.62);
+    chair(t2,px,F2,pz,DIAG_ANG+(side>0?0:Math.PI));
+    if(i!==2&&i!==3)person(t2,px,F2,pz,DIAG_ANG+(side>0?0:Math.PI),'sit',i);
+  });
+  /* A0プロッター(ホール斜め壁沿い・事務所②側) */
+  const [ax,az]=P(5.5,4.4);
+  const ag=new THREE.Group();ag.position.set(ax,F2,az);ag.rotation.y=-Math.PI/4;t2.add(ag);
+  mesh(B(1.3,.5,.55),M({color:0x8a4029,roughness:.7}),0,.75,0,ag);
+  mesh(B(.09,.5,.5),darkMat,-.55,.25,0,ag);mesh(B(.09,.5,.5),darkMat,.55,.25,0,ag);
+  mesh(B(1.1,.04,.3),M({color:0xf8f8f6,roughness:.6}),0,1.03,.1,ag);
+  /* 斜め壁沿いの長机 */
+  const [wx,wz]=DP(6.3,1.0);
+  const wb=new THREE.Group();wb.position.set(wx,F2,wz);wb.rotation.y=DIAG_ANG;t2.add(wb);
+  mesh(B(2.6,.07,.85),M({color:0xd9d4c8,roughness:.7}),0,.85,0,wb);
+  mesh(B(.1,.8,.8),darkMat,-1.15,.42,0,wb);
+  mesh(B(.1,.8,.8),darkMat,1.15,.42,0,wb);
+  const zu=mesh(new THREE.PlaneGeometry(.9,.6),M({color:0xf2efe6,roughness:.9}),-.4,.9,0,wb);zu.rotation.x=-Math.PI/2;
+  person(wb,.3,0,.7,Math.PI,'stand',1);
+  person(t2,P(6.3,3.2)[0],F2,P(6.3,3.2)[1],2.2,'stand',3); // ホール
+}
+
+/* ============ 大型スクリーン(2F・縦型動画)+ロゴパネル ============ */
+const video=document.createElement('video');
+video.src='satonaka_screen.mp4';
+video.loop=true;video.muted=true;video.playsInline=true;
+video.setAttribute('playsinline','');
+video.style.display='none';
+document.body.appendChild(video);
+const vidTex=new THREE.VideoTexture(video);
+vidTex.colorSpace=THREE.SRGBColorSpace;
+const vidMat=new THREE.MeshBasicMaterial({map:vidTex,toneMapped:false});
+function tryPlay(){video.play().catch(()=>{});}
+tryPlay();
+video.addEventListener('canplay',tryPlay);
+addEventListener('pointerdown',tryPlay);
+/* 2F: スクリーン壁(z=2.73 給湯室南壁)に設置 */
+{
+  const [x,z]=P(1.35,2.73);
+  mesh(B(1.5,2.5,.12),darkMat,x,F2+1.28,z+.12,t2).castShadow=false;
+  const sc=new THREE.Mesh(new THREE.PlaneGeometry(1.29,2.3),vidMat);
+  sc.position.set(x,F2+1.28,z+.19);sc.castShadow=false;t2.add(sc);
+  /* 隣に添付ロゴパネル */
+  const lp=mesh(B(1.7,1.0,.08),logoMatH,x+1.6,F2+1.65,z+.12,t2);lp.castShadow=false;
+}
+/* 1F 休憩所TV(同じ動画・縦型/倉庫南壁の作業場側) */
+{
+  mesh(B(1.05,1.8,.1),darkMat,P(6.9,4.095)[0],FT+1.75,P(6.9,4.095)[1]+.14,t1).castShadow=false;
+  const sc=new THREE.Mesh(new THREE.PlaneGeometry(.92,1.64),vidMat);
+  sc.position.set(P(6.9,4.095)[0],FT+1.75,P(6.9,4.095)[1]+.21);
+  sc.castShadow=false;t1.add(sc);
+}
+
+/* ============ フロア分解ラベル ============ */
+function floorLabelSprite(text){
+  const c=document.createElement('canvas');c.width=640;c.height=112;
+  const x=c.getContext('2d');
+  x.fillStyle='rgba(43,63,85,.93)';
+  x.beginPath();x.roundRect(4,8,632,96,20);x.fill();
+  const fs=Math.min(44,Math.floor(600/Math.max(1,text.length))+12);
+  x.fillStyle='#fff';x.font=`600 ${fs}px "Yu Gothic",sans-serif`;
+  x.textAlign='center';x.textBaseline='middle';x.fillText(text,320,58,600);
+  const t=tex(c);
+  const sm=new THREE.SpriteMaterial({map:t,transparent:true,opacity:0,depthTest:false});
+  const sp=new THREE.Sprite(sm);sp.scale.set(10.5,1.85,1);return sp;
+}
+const lb1=floorLabelSprite('1F　作業場兼休憩所・倉庫・エントランス');
+lb1.position.set(P(13.2,5.5)[0],FT+2.0,P(13.2,5.5)[1]);t1.add(lb1);
+const lb2=floorLabelSprite('2F　事務所①②・給湯室・バルコニー');
+lb2.position.set(P(13.2,5.5)[0],F2+1.5,P(13.2,5.5)[1]);t2.add(lb2);
+
+/* ============ 社用車(仮:白+紺帯) ============ */
+function van(x,z,ry){
+  const g=new THREE.Group();g.position.set(x,.02,z);g.rotation.y=ry;scene.add(g);
+  mesh(B(3.4,1.35,1.6),M({color:0xeef0f2,roughness:.4,metalness:.2}),0,1.0,0,g);
+  mesh(B(1.1,.55,1.5),M({color:0xeef0f2,roughness:.4}),1.55,.62,0,g);
+  mesh(B(3.42,.28,1.62),navy,0,.95,0,g).castShadow=false;
+  const ws=mesh(B(.55,.5,1.45),M({color:0x2a3138,roughness:.2}),1.0,1.45,0,g);ws.castShadow=false;
+  [[-1.1,.85],[1.35,.85],[-1.1,-.85],[1.35,-.85]].forEach(([wx,wz])=>{
+    const w=mesh(new THREE.CylinderGeometry(.34,.34,.28,10),darkMat,wx,.34,wz,g);
+    w.rotation.x=Math.PI/2;
+  });
+  return g;
+}
+van(4.7,-8.7,Math.PI/2);
+van(12.3,1.9,Math.PI/2);
+van(14.9,1.9,Math.PI/2);
+const movVan=van(21.5,60,Math.PI/2);
+/* 車止め */
+[9.7,12.3,14.9,17.5].forEach(bx=>{
+  mesh(B(.5,.16,.16),M({color:0xd8dadd,roughness:.8}),bx-.45,.08,4.2);
+  mesh(B(.5,.16,.16),M({color:0xd8dadd,roughness:.8}),bx+.45,.08,4.2);
+});
+
+/* ============ 外構 ============ */
+function tree(parent,x,y,z,s=1){
+  const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=(x*3.1+z*1.7)%Math.PI;parent.add(g);
+  mesh(new THREE.CylinderGeometry(.07*s,.11*s,1.1*s,6),trunkMat,0,.55*s,0,g);
+  const mat=leafMats[Math.abs(Math.round(x*7+z*3))%3];
+  [[0,1.75,0,.5],[.42,1.5,.12,.38],[-.4,1.45,-.1,.36],[.1,1.5,.42,.34]].forEach(([lx,ly,lz,r])=>{
+    mesh(new THREE.IcosahedronGeometry(r*s,0),mat,lx*s,ly*s,lz*s,g);
+  });
+  return g;
+}
+tree(scene,-9,0,2,1.3);
+tree(scene,-7,0,8,1.1);
+tree(scene,14,0,10,1.2);
+tree(scene,-10,0,-8,1.4);
+for(let i=0;i<8;i++)mesh(B(1.6,.7,.5),leafMats[2],-8+i*1.7,.35,11.5);
+for(let i=0;i<6;i++)mesh(B(.5,.7,1.6),leafMats[2],-10.5,.35,1+i*1.8);
+/* 自立看板(添付ロゴ・縦型) */
+{
+  const g=new THREE.Group();g.position.set(17.5,0,7.5);scene.add(g);
+  mesh(new THREE.CylinderGeometry(.14,.16,3.2,10),bandMat,0,1.6,0,g);
+  const p=new THREE.Mesh(B(1.0,3.6,.22),new THREE.MeshBasicMaterial({map:logoTexV()}));
+  p.position.set(0,4.7,0);p.castShadow=true;g.add(p);
+}
+/* 街灯 */
+const lampBulbs=[];
+function lamp(x,z){
+  const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+  mesh(new THREE.CylinderGeometry(.07,.1,4.4,8),darkMat,0,2.2,0,g);
+  const b=mesh(new THREE.SphereGeometry(.24,10,8),M({color:0xfff3d0,emissive:0xffe9b0,emissiveIntensity:.2,roughness:.4}),0,4.5,0,g);
+  const pl=new THREE.PointLight(0xffd9a0,0,16,2);pl.position.set(0,4.3,0);g.add(pl);
+  lampBulbs.push({b,pl});
+}
+lamp(-6,-10.5);lamp(8,-10.5);lamp(18.5,-4);lamp(18.5,8);
+/* 背景の家々 */
+function house(x,z,ry){
+  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=ry;scene.add(g);
+  mesh(B(7,5,8),M({color:0xd8d4ca,roughness:.9}),0,2.5,0,g);
+  const s=new THREE.Shape();s.moveTo(-3.8,0);s.lineTo(3.8,0);s.lineTo(0,2.2);s.closePath();
+  const rg=new THREE.ExtrudeGeometry(s,{depth:8.4,bevelEnabled:false});rg.translate(0,0,-4.2);
+  mesh(rg,M({color:0x6b7078,roughness:.8}),0,5,0,g);
+  return g;
+}
+house(-16,-22,0);house(0,-24,.1);house(14,-23,0);house(-20,6,Math.PI/2);house(30,2,Math.PI/2);house(30,16,Math.PI/2);
+person(scene,11.8+OX*0,0,2.1,-1.2,'stand',5);
+person(scene,7.6,0,2.6,1.8,'stand',0);
+
+/* ============ 雲・星・月 ============ */
+const cloudMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.85});
+function cloud(x,y,z,s){
+  const g=new THREE.Group();g.position.set(x,y,z);scene.add(g);
+  [[0,0,0,1],[1.1,.15,.2,.7],[-1,.1,-.1,.75],[.4,.45,-.2,.6]].forEach(([cx,cy,cz,cs])=>{
+    const m=new THREE.Mesh(new THREE.SphereGeometry(1.6*cs*s,8,6),cloudMat);
+    m.position.set(cx*s,cy*s,cz*s);m.scale.y=.55;g.add(m);
+  });
+  return g;
+}
+const clouds=[cloud(-50,34,-60,3.5),cloud(40,38,-70,4),cloud(70,32,-20,3),cloud(-70,36,20,4)];
+const STAR_N=450;
+const stPos=new Float32Array(STAR_N*3);
+for(let i=0;i<STAR_N;i++){
+  const th=Math.sin(i*12.9898)*Math.PI*2, ph=(Math.sin(i*78.233)*.5+.5)*Math.PI*.45;
+  const r=260;
+  stPos[i*3]=Math.cos(th)*Math.cos(ph)*r;
+  stPos[i*3+1]=Math.sin(ph)*r+10;
+  stPos[i*3+2]=Math.sin(th)*Math.cos(ph)*r;
+}
+const starGeo=new THREE.BufferGeometry();
+starGeo.setAttribute('position',new THREE.BufferAttribute(stPos,3));
+const starMat=new THREE.PointsMaterial({color:0xffffff,size:1.2,transparent:true,opacity:0,depthWrite:false});
+const stars=new THREE.Points(starGeo,starMat);stars.visible=false;scene.add(stars);
+const moon=new THREE.Mesh(new THREE.SphereGeometry(6,16,12),new THREE.MeshBasicMaterial({color:0xf5f0dc,transparent:true,opacity:0}));
+moon.position.set(-110,80,-140);moon.visible=false;scene.add(moon);
+
+/* ============ 室内照明 ============ */
+[[t1,2.5,FT+3.2,4.5],[t1,5.5,FT+3.2,6.0],[t1,7.8,FT+3.0,2.0],[t1,9.1,FT+3.0,8.6],
+ [t2,2.5,F2+2.2,4.5],[t2,5.0,F2+2.2,5.5],[t2,8.6,F2+2.2,2.8],[t2,2.4,F2+2.2,1.7]].forEach(([tr,px,y,pz])=>{
+  const [x,z]=P(px,pz);
+  const p=new THREE.PointLight(0xfff4e0,22,13,2);
+  p.position.set(x,y,z);tr.add(p);inLights.push(p);
+});
+
+/* ============ トグル(昼夜・屋根・分解) ============ */
+let nightT=0,nightTarget=0,exT=0,exTarget=0;
+const G=4.6;
+const btnD=document.getElementById('btn-day');
+const btnN=document.getElementById('btn-night');
+const btnRoofOff=document.getElementById('btn-roofoff');
+const btnRoofOn=document.getElementById('btn-roofon');
+const btnWh=document.getElementById('btn-whole');
+const btnEx=document.getElementById('btn-explode');
+btnD.addEventListener('click',()=>{nightTarget=0;btnD.classList.add('active');btnN.classList.remove('active');document.body.classList.remove('night');tryPlay();});
+btnN.addEventListener('click',()=>{nightTarget=1;btnN.classList.add('active');btnD.classList.remove('active');document.body.classList.add('night');tryPlay();});
+btnRoofOff.addEventListener('click',()=>{tR.visible=false;btnRoofOff.classList.add('active');btnRoofOn.classList.remove('active');tryPlay();});
+btnRoofOn.addEventListener('click',()=>{tR.visible=true;btnRoofOn.classList.add('active');btnRoofOff.classList.remove('active');tryPlay();});
+let camFrom=null,camTo=null;
+function setMode(t){
+  exTarget=t;
+  camFrom=camera.position.clone();
+  const dir=camera.position.clone().sub(new THREE.Vector3(controls.target.x,0,controls.target.z));
+  dir.y=0;
+  if(dir.lengthSq()<1e-4)dir.set(-.6,0,.8);
+  dir.normalize();
+  const d=t?30:24, h=t?17:13;
+  camTo=new THREE.Vector3(controls.target.x+dir.x*d,h,controls.target.z+dir.z*d);
+  tryPlay();
+}
+btnWh.addEventListener('click',()=>{setMode(0);btnWh.classList.add('active');btnEx.classList.remove('active');});
+btnEx.addEventListener('click',()=>{setMode(1);btnEx.classList.add('active');btnWh.classList.remove('active');});
+
+const SUN_D=new THREE.Color(0xfff2da), SUN_N=new THREE.Color(0x8fa8d8);
+function applyNight(t){
+  scene.background.copy(SKY_D).lerp(SKY_N,t);
+  scene.fog.color.copy(scene.background);
+  sun.intensity=1.5-1.38*t;
+  sun.color.copy(SUN_D).lerp(SUN_N,t);
+  hemi.intensity=.95-.8*t;
+  amb.intensity=.34-.26*t;
+  inLights.forEach(p=>p.intensity=22+38*t);
+  lampBulbs.forEach(({b,pl})=>{
+    b.material.emissiveIntensity=.2+1.3*t;
+    pl.intensity=t*26;
+  });
+  starMat.opacity=t;stars.visible=t>.05;
+  moon.material.opacity=t;moon.visible=t>.05;
+  cloudMat.opacity=.85-.6*t;
+}
+function applyExplode(t){
+  t2.position.y=t*G;
+  tR.position.y=t*G*2;
+  lb1.material.opacity=t;lb2.material.opacity=t;
+  controls.target.y=3.4+t*2.6;
+}
+
+/* ============ ループ ============ */
+const clk=new THREE.Clock();
+function loop(){
+  requestAnimationFrame(loop);
+  const dt=Math.min(clk.getDelta(),.05);
+  if(Math.abs(nightT-nightTarget)>1e-3){nightT+=(nightTarget-nightT)*Math.min(1,dt*2.2);applyNight(nightT);}
+  if(Math.abs(exT-exTarget)>1e-3){
+    exT+=(exTarget-exT)*Math.min(1,dt*2.2);
+    applyExplode(exT);
+    if(camFrom&&camTo){
+      const p=exTarget===1?exT:1-exT;
+      camera.position.lerpVectors(camFrom,camTo,p);
+    }
+  }
+  clouds.forEach((c,i)=>{c.position.x+=dt*(.3+i*.1);if(c.position.x>110)c.position.x=-110;});
+  movVan.position.z-=dt*7;if(movVan.position.z<-90)movVan.position.z=90;
+  controls.update();
+  renderer.render(scene,camera);
+}
+applyNight(0);applyExplode(0);
+loop();
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
