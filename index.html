@@ -58,7 +58,7 @@ const SKY_D=new THREE.Color(0xbcd8ee), SKY_N=new THREE.Color(0x0d1524);
 scene.background=SKY_D.clone();
 scene.fog=new THREE.Fog(SKY_D.clone(),90,320);
 
-const camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.1,900);
+const camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.3,900);
 camera.position.set(23,11,17);
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
