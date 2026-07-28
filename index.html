@@ -669,9 +669,9 @@ function ofcDesk(parent,cx,cz,ry,side){ // side:+1/-1 椅子側
   person(t2,P(6.3,3.2)[0],F2,P(6.3,3.2)[1],2.2,'stand',3); // ホール
 }
 
-/* ============ 大型スクリーン(2F・縦型動画)+ロゴパネル ============ */
+/* ============ 大型スクリーン(2F・横型採用動画)+ロゴパネル ============ */
 const video=document.createElement('video');
-video.src='satonaka_screen.mp4';
+video.src='satonaka_recruit.mp4';
 video.loop=true;video.muted=true;video.playsInline=true;
 video.setAttribute('playsinline','');
 video.style.display='none';
@@ -686,17 +686,17 @@ addEventListener('pointerdown',tryPlay);
 /* 2F: スクリーン壁(z=2.73 給湯室南壁)に設置 */
 {
   const [x,z]=P(1.35,2.73);
-  mesh(B(1.5,2.5,.12),darkMat,x,F2+1.28,z+.12,t2).castShadow=false;
-  const sc=new THREE.Mesh(new THREE.PlaneGeometry(1.29,2.3),vidMat);
-  sc.position.set(x,F2+1.28,z+.19);sc.castShadow=false;t2.add(sc);
+  mesh(B(2.08,1.24,.12),darkMat,x,F2+1.5,z+.12,t2).castShadow=false;
+  const sc=new THREE.Mesh(new THREE.PlaneGeometry(1.92,1.08),vidMat);
+  sc.position.set(x,F2+1.5,z+.19);sc.castShadow=false;t2.add(sc);
   /* 隣に添付ロゴパネル */
-  const lp=mesh(B(1.7,1.0,.08),logoMatH,x+1.6,F2+1.65,z+.12,t2);lp.castShadow=false;
+  const lp=mesh(B(1.4,.82,.08),logoMatH,x+1.8,F2+1.6,z+.12,t2);lp.castShadow=false;
 }
-/* 1F 休憩所TV(同じ動画・縦型/倉庫南壁の作業場側) */
+/* 1F 休憩所TV(同じ動画・横型/倉庫南壁の作業場側) */
 {
-  mesh(B(1.05,1.8,.1),darkMat,P(6.9,4.095)[0],FT+1.75,P(6.9,4.095)[1]+.14,t1).castShadow=false;
-  const sc=new THREE.Mesh(new THREE.PlaneGeometry(.92,1.64),vidMat);
-  sc.position.set(P(6.9,4.095)[0],FT+1.75,P(6.9,4.095)[1]+.21);
+  mesh(B(1.8,1.06,.1),darkMat,P(6.9,4.095)[0],FT+1.6,P(6.9,4.095)[1]+.14,t1).castShadow=false;
+  const sc=new THREE.Mesh(new THREE.PlaneGeometry(1.64,.92),vidMat);
+  sc.position.set(P(6.9,4.095)[0],FT+1.6,P(6.9,4.095)[1]+.21);
   sc.castShadow=false;t1.add(sc);
 }
 
