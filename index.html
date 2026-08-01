@@ -31,7 +31,7 @@
 <div id="app"></div>
 <div class="ui" id="title">
   <h1>株式会社 里中電気　新社屋</h1>
-  <p>SATONAKA DENKI NEW OFFICE ｜ plan6 平面図より作成・3Dパース（色は仮）</p>
+  <p>SATONAKA DENKI NEW OFFICE ｜ plan6 平面図より作成・外装色は実施パース準拠</p>
 </div>
 <div class="ui" id="hint">ドラッグで回転 ／ ホイールでズーム ／ 2Fの大型スクリーンで動画再生中</div>
 <div class="ui btn-group" id="modeui">
@@ -118,13 +118,24 @@ const t1=new THREE.Group();scene.add(t1);        // 1F(躯体1F+内装)
 const t2=new THREE.Group();scene.add(t2);        // 2F(スラブ+内装+パラペット)
 const tR=new THREE.Group();scene.add(tR);        // 屋根
 
-/* ============ マテリアル（仮色） ============ */
-const wallOut =M({color:0xeef0ea,roughness:.85});
+/* ============ マテリアル（実施パース準拠: KMEWセラディール） ============ */
+/* 横目地入りサイディングテクスチャ */
+function sidingTex(base,line,n){
+  const c=document.createElement('canvas');c.width=64;c.height=512;
+  const x=c.getContext('2d');
+  x.fillStyle=base;x.fillRect(0,0,64,512);
+  x.strokeStyle=line;x.lineWidth=2;
+  for(let i=1;i<n;i++){x.beginPath();x.moveTo(0,i*512/n);x.lineTo(64,i*512/n);x.stroke();}
+  return tex(c);
+}
+const wallOut =M({map:sidingTex('#e7e6e0','#d9d8d2',9),roughness:.85});   // 1F: CW2422GC MWラントライトグレー
+const wall2Out=M({map:sidingTex('#4b4a47','#413f3d',8),roughness:.8});    // 2F: CW2424GC MWラントブラック
+const copingMat=M({color:0x1f2225,roughness:.55,metalness:.2});           // 笠木・見切り・庇(黒)
 const wallIn  =M({color:0xf5f4ef,roughness:.9});
 const navy    =M({color:0x2b3a55,roughness:.6});
-const bandMat =M({color:0x3a4048,roughness:.6,metalness:.2});
-const glassMat=M({color:0x84b8d2,roughness:.08,metalness:.25,transparent:true,opacity:.55,side:THREE.DoubleSide});
-const frameMat=M({color:0xd9dbd7,roughness:.6});
+const bandMat =M({color:0x2b2f34,roughness:.6,metalness:.2});
+const glassMat=M({color:0x8aa4b4,roughness:.08,metalness:.3,transparent:true,opacity:.5,side:THREE.DoubleSide});
+const frameMat=M({color:0x1d2124,roughness:.45,metalness:.35});           // 黒サッシ
 const floorWork=M({color:0xc9cdd0,roughness:.95});
 const floorEnt=M({color:0xd8d2c2,roughness:.85});
 const floorOfc=M({color:0xa8b4bd,roughness:.95,side:THREE.DoubleSide});
@@ -260,16 +271,28 @@ function winPane(px,pz,y,w,h,ry=0,parent=t1,hood=0){
   mesh(B(w,h,.26),frameMat,0,0,0,g).castShadow=false;
   const gl=mesh(B(w-.12,h-.12,.24),glassMat,0,0,0,g);gl.castShadow=false;
   mesh(B(.05,h-.12,.27),bandMat,0,0,0,g).castShadow=false;
-  if(hood)mesh(B(w+.18,.14,.28),frameMat,0,h/2+.1,hood*.2,g); // 水切り庇
+  if(hood)mesh(B(w+.22,.16,.34),frameMat,0,h/2+.11,hood*.22,g); // 水切り庇(黒)
   return g;
 }
 
 /* ============ 外壁(斜め面は開放カットアウェイ) ============ */
 const EXT1=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[3.64,0,10.01,0],[10.01,0,10.01,10.92],[7.28,10.92,10.01,10.92],[0,.91,0,4.55]];
 EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,H1,wallOut,.2,t1));
-/* 2F: バルコニーも立面図どおり壁で囲う(東面に窓開口) */
-const EXT2=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[3.64,0,10.01,0],[10.01,0,10.01,10.92],[7.28,10.92,10.01,10.92],[0,.91,0,4.55]];
-EXT2.forEach(s=>wall(s[0],s[1],s[2],s[3],F2,H2+PAR,wallOut,.2,t2));
+/* 2F: 外壁ダーク(実施パース準拠)。東面バルコニー部は開口(手すり壁+垂れ壁) */
+const EXT2=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[3.64,0,10.01,0],[7.28,10.92,10.01,10.92],[0,.91,0,4.55]];
+EXT2.forEach(s=>wall(s[0],s[1],s[2],s[3],F2,H2+PAR,wall2Out,.2,t2));
+/* 東面: バルコニー開口(z6.6-9.8)を挟んで分割 */
+wall(10.01,0,10.01,6.6,F2,H2+PAR,wall2Out,.2,t2);
+wall(10.01,9.8,10.01,10.92,F2,H2+PAR,wall2Out,.2,t2);
+wall(10.01,6.6,10.01,9.8,F2,1.0,wall2Out,.2,t2);              // 手すり壁
+wall(10.01,6.6,10.01,9.8,F2+2.4,H2+PAR-2.4,wall2Out,.2,t2);   // 垂れ壁+パラペット
+wall(10.01,6.55,10.01,9.85,F2+.96,.1,copingMat,.3,t2);        // 手すり笠木
+wall(10.01,6.55,10.01,9.85,F2+2.36,.1,copingMat,.24,t2);      // 開口上枠
+const EXT2F=[...EXT2,[10.01,0,10.01,10.92]];
+/* 1F/2F見切り(黒) */
+EXT2F.forEach(s=>wall(s[0],s[1],s[2],s[3],F2-.04,.18,copingMat,.24,t2));
+/* パラペット笠木(黒) */
+EXT2F.forEach(s=>wall(s[0],s[1],s[2],s[3],TOP+PAR-.12,.16,copingMat,.3,t2));
 /* 幅木(外周ベース・濃色) */
 EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,.24,bandMat,.26,t1));
 /* 斜め面の見切り・柱 */
@@ -286,7 +309,7 @@ EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,.24,bandMat,.26,t1));
   for(let i=1;i<4;i++){
     const t=i/4;
     mesh(B(.24,H1,.24),M({color:0xdcddd6,roughness:.8}),dx0+(dx1-dx0)*t,FT+H1/2,dz0+(dz1-dz0)*t,t1);
-    mesh(B(.24,H2,.24),M({color:0xdcddd6,roughness:.8}),dx0+(dx1-dx0)*t,F2+H2/2,dz0+(dz1-dz0)*t,t2);
+    mesh(B(.24,H2,.24),M({color:0x3d3c3a,roughness:.8}),dx0+(dx1-dx0)*t,F2+H2/2,dz0+(dz1-dz0)*t,t2);
   }
 }
 /* ===== 窓(立面図準拠) ===== */
@@ -301,7 +324,7 @@ winPane(4.9,0,F2+.95,1.2,1.2,0,t2,-1);              // 2F トイレ
   const dz=P(0,2.6)[1];
   const dg=new THREE.Group();dg.position.set(WWX,0,dz);dg.rotation.y=-Math.PI/2;t1.add(dg);
   mesh(B(1.0,2.15,.06),bandMat,0,FT+1.1,0,dg).castShadow=false;       // 勝手口枠
-  mesh(B(.86,2.05,.08),M({color:0xcfd4d8,roughness:.5,metalness:.3}),0,FT+1.1,.03,dg);
+  mesh(B(.86,2.05,.08),M({color:0x24272b,roughness:.5,metalness:.3}),0,FT+1.1,.03,dg);
   const dgl=mesh(B(.6,.9,.1),glassMat,0,FT+1.55,.03,dg);dgl.castShadow=false;
   /* 面格子窓 */
   const lg=new THREE.Group();lg.position.set(WWX,FT+1.55,P(0,3.75)[1]);lg.rotation.y=-Math.PI/2;t1.add(lg);
@@ -339,31 +362,36 @@ const EWX=P(10.01,0)[0]+.11;            // 東壁 外面x
   mesh(B(3.58,.14,.28),frameMat,0,.62,.12,g);        // 水切り
 }
 winPane(10.01,5.85,F2+1.0,1.1,1.1,Math.PI/2,t2,1);   // 2F 正方形窓
-winPane(10.01,9.1,F2+1.15,1.6,1.1,Math.PI/2,t2,1);   // バルコニー窓
-/* ===== エントランス(東・木縦格子スクリーン+木格子ドア+庇) ===== */
+/* バルコニー窓は開口化に伴い削除(開口越しに掃き出し窓が見える) */
+/* ===== エントランス(東・黒縦格子スクリーン+黒ドア+庇) 実施パース準拠 ===== */
 {
-  const woodSlat=M({color:0x9a6b40,roughness:.75});
+  const blackSlat=M({color:0x26292d,roughness:.6,metalness:.15});
   const slat=(pz)=>{
-    const s=mesh(B(.07,H1-.15,.09),woodSlat,EWX+.10,FT+(H1-.15)/2,P(10.01,pz)[1],t1);
+    const s=mesh(B(.07,H1-.15,.09),blackSlat,EWX+.10,FT+(H1-.15)/2,P(10.01,pz)[1],t1);
     s.castShadow=false;return s;
   };
   /* 格子帯(窓・ドアを避けて3帯) */
   [[5.95,6.38],[7.68,8.14],[10.05,10.6]].forEach(([a,b])=>{
     for(let pz=a;pz<=b+.01;pz+=.16)slat(pz);
   });
-  /* 木格子ドア(立面図: 縦板+筋交い) z6.5-7.5 */
+  /* コーナー縦格子: 2Fまで延長(実施パースのコーナーアクセント) */
+  for(let pz=10.05;pz<=10.85;pz+=.16){
+    const s=mesh(B(.07,H2+PAR-.2,.09),blackSlat,EWX+.10,F2+(H2+PAR-.2)/2,P(10.01,pz)[1],t2);
+    s.castShadow=false;
+  }
+  /* 玄関ドア(黒・縦スリットガラス) z6.5-7.5 */
   const dz=P(10.01,7.0)[1];
   const dg=new THREE.Group();dg.position.set(EWX+.02,0,dz);dg.rotation.y=Math.PI/2;t1.add(dg);
   mesh(B(1.2,2.5,.06),bandMat,0,FT+1.28,0,dg).castShadow=false;        // 開口枠
-  const dr=mesh(B(1.0,2.4,.09),M({color:0x7a5231,roughness:.7}),0,FT+1.25,.03,dg);
-  for(let i=0;i<5;i++)mesh(B(.1,2.34,.05),woodSlat,-.4+i*.2,FT+1.25,.09,dg).castShadow=false;
+  const dr=mesh(B(1.0,2.4,.09),M({color:0x1d2023,roughness:.5,metalness:.25}),0,FT+1.25,.03,dg);
+  const ds=mesh(B(.16,1.9,.05),glassMat,-.1,FT+1.3,.09,dg);ds.castShadow=false; // 縦スリットガラス
   mesh(B(.05,.9,.07),M({color:0xd8dcdf,roughness:.3,metalness:.7}),.42,FT+1.25,.13,dg).castShadow=false; // ハンドル
   /* ドア上の横スリット + エントランス南側の横スリット(立面図) */
   winPane(10.01,7.0,FT+3.15,1.35,.55,Math.PI/2,t1,1);
   winPane(10.01,9.1,FT+3.15,1.6,.55,Math.PI/2,t1,1);
-  /* 庇(木軒天) */
-  const cv=mesh(B(1.6,.14,2.4),navy,EWX+.8,FT+3.0,dz,t1);
-  const sof=flat(1.5,2.3,EWX+.8,dz,M({color:0x8a5f38,roughness:.8}),0,t1);
+  /* 庇(黒・軒天も黒) */
+  const cv=mesh(B(1.6,.14,2.4),copingMat,EWX+.8,FT+3.0,dz,t1);
+  const sof=flat(1.5,2.3,EWX+.8,dz,M({color:0x2a2d31,roughness:.7}),0,t1);
   sof.position.y=FT+2.92;sof.rotation.x=Math.PI/2;
   /* ロゴ銘板(ドア横) + ポーチ照明 */
   const lp=mesh(B(.05,.4,1.5),logoMatH,EWX+.13,FT+1.7,P(10.01,8.6)[1],t1);
@@ -400,7 +428,7 @@ winPane(10.01,9.1,F2+1.15,1.6,1.1,Math.PI/2,t2,1);   // バルコニー窓
   const slope=1.4/10.01;
   for(let i=0;i<pos.count;i++)pos.setY(i,pos.getY(i)+(pos.getX(i)+5)*slope);
   g.computeVertexNormals();
-  const m=new THREE.Mesh(g,M({color:0x33383f,roughness:.8}));
+  const m=new THREE.Mesh(g,M({color:0x212428,roughness:.8}));
   m.castShadow=m.receiveShadow=true;tR.add(m);
   /* 屋上設備(勾配に合わせた高さ) */
   const rY=px=>TOP+.55+(P(px,0)[0]+5)*slope;
@@ -411,7 +439,7 @@ tR.visible=false;
 /* 雨樋(西=低い側) */
 [[0,1.15],[0,4.35],[3.55,.08]].forEach(([px,pz])=>{
   const [x,z]=P(px,pz);
-  mesh(new THREE.CylinderGeometry(.045,.045,TOP-.4,8),M({color:0x8b9095,roughness:.6}),x-.14,(TOP-.4)/2+.2,z,t1).castShadow=false;
+  mesh(new THREE.CylinderGeometry(.045,.045,TOP-.4,8),M({color:0x35383c,roughness:.6}),x-.14,(TOP-.4)/2+.2,z,t1).castShadow=false;
 });
 /* 室外機(北側) */
 [[6.9,-.42],[8.1,-.42]].forEach(([px,pz])=>{
