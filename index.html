@@ -285,7 +285,7 @@ function winPane(px,pz,y,w,h,ry=0,parent=t1,hood=0){
   return g;
 }
 
-/* ============ 外壁(斜め面は開放カットアウェイ) ============ */
+/* ============ 外壁(全周閉鎖・内観はフロア分解で確認) ============ */
 const BRK=FT+3.2;   // ダーク/ホワイト見切り高さ(実施パース比率: 2Fダーク帯を1Fより大きく)
 const EXT1=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[3.64,0,10.01,0],[10.01,0,10.01,6.5],[10.01,9.6,10.01,10.92],[7.28,10.92,10.01,10.92],[0,.91,0,4.55]];
 EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,H1,wallOut,.2,t1));
@@ -333,22 +333,18 @@ wall(8.45,7.1,8.45,10.3,F2,2.4,M({color:0x1e2023,roughness:.95}),.06,t2);
 }
 /* 幅木(外周ベース・濃色) */
 EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,.24,bandMat,.26,t1));
-/* 斜め面の見切り・柱 */
+/* 斜め面: 白壁で閉鎖(ワントーン・実施パース準拠) */
 {
-  const [dx0,dz0]=P(0,4.55),[dx1,dz1]=P(7.28,10.92);
-  const len=Math.hypot(dx1-dx0,dz1-dz0);
-  const mk=(y,h,parent)=>{
-    const b=mesh(B(len,h,.22),bandMat,(dx0+dx1)/2,y,(dz0+dz1)/2,parent);
-    b.rotation.y=DIAG_ANG;return b;
-  };
-  mk(FT/2,FT,t1);
-  mk(F2-SL/2,SL+.1,t2);
-  mk(TOP+PAR/2,PAR,t2);
-  for(let i=1;i<4;i++){
-    const t=i/4;
-    mesh(B(.24,H1,.24),M({color:0xdcddd6,roughness:.8}),dx0+(dx1-dx0)*t,FT+H1/2,dz0+(dz1-dz0)*t,t1);
-    mesh(B(.24,H2,.24),M({color:0x3d3c3a,roughness:.8}),dx0+(dx1-dx0)*t,F2+H2/2,dz0+(dz1-dz0)*t,t2);
-  }
+  wall(0,4.55,7.28,10.92,FT,H1,wallOut,.2,t1);                 // 1F(窓なし)
+  wall(0,4.55,7.28,10.92,F2,H2+PAR,wallOut,.2,t2);             // 2F
+  wall(0,4.55,7.28,10.92,FT,.24,bandMat,.26,t1);               // 幅木
+  wall(0,4.55,7.28,10.92,TOP+PAR-.12,.16,copingMat,.3,t2);     // 笠木
+  /* 2F窓(1つ・黒サッシ) */
+  const [wx,wz]=DP(4.8,-.13);
+  const g=new THREE.Group();g.position.set(wx,F2+1.4,wz);g.rotation.y=DIAG_ANG;t2.add(g);
+  mesh(B(1.3,1.3,.26),frameMat,0,0,0,g).castShadow=false;
+  const gl=mesh(B(1.18,1.18,.24),glassMat,0,0,0,g);gl.castShadow=false;
+  mesh(B(.05,1.18,.27),bandMat,0,0,0,g).castShadow=false;
 }
 /* ===== 窓(実施パース準拠) ===== */
 /* 切欠き面(z=.91): 2F小角窓ペア(高め) */
