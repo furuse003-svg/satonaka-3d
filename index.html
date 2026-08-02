@@ -136,6 +136,15 @@ const navy    =M({color:0x2b3a55,roughness:.6});
 const bandMat =M({color:0x2b2f34,roughness:.6,metalness:.2});
 const glassMat=M({color:0x8aa4b4,roughness:.08,metalness:.3,transparent:true,opacity:.5,side:THREE.DoubleSide});
 const frameMat=M({color:0x1d2124,roughness:.45,metalness:.35});           // 黒サッシ
+/* アプローチ用タイルテクスチャ(実施パースの敷きタイル) */
+const tileT=(()=>{
+  const c=document.createElement('canvas');c.width=c.height=128;
+  const x=c.getContext('2d');
+  x.fillStyle='#cfcac2';x.fillRect(0,0,128,128);
+  x.strokeStyle='#b7b2aa';x.lineWidth=4;x.strokeRect(0,0,128,128);
+  const t=tex(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(7,5);return t;
+})();
+const approachMat=M({map:tileT,roughness:.9});
 const floorWork=M({color:0xc9cdd0,roughness:.95});
 const floorEnt=M({color:0xd8d2c2,roughness:.85});
 const floorOfc=M({color:0xa8b4bd,roughness:.95,side:THREE.DoubleSide});
@@ -278,21 +287,39 @@ function winPane(px,pz,y,w,h,ry=0,parent=t1,hood=0){
 /* ============ 外壁(斜め面は開放カットアウェイ) ============ */
 const EXT1=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[3.64,0,10.01,0],[10.01,0,10.01,10.92],[7.28,10.92,10.01,10.92],[0,.91,0,4.55]];
 EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,H1,wallOut,.2,t1));
-/* 2F: 外壁ダーク(実施パース準拠)。東面バルコニー部は開口(手すり壁+垂れ壁) */
-const EXT2=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[3.64,0,10.01,0],[7.28,10.92,10.01,10.92],[0,.91,0,4.55]];
-EXT2.forEach(s=>wall(s[0],s[1],s[2],s[3],F2,H2+PAR,wall2Out,.2,t2));
-/* 東面: バルコニー開口(z6.6-9.8)を挟んで分割 */
+/* 2F: ダーク外壁は正面(東)+南返しのみ、他の面は白(実施パース準拠) */
+const EXT2W=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[0,.91,0,4.55]]; // 白(裏側: 切欠き・西)
+EXT2W.forEach(s=>wall(s[0],s[1],s[2],s[3],F2,H2+PAR,wallOut,.2,t2));
+wall(3.64,0,10.01,0,F2,H2+PAR,wall2Out,.2,t2);                // 北面(道路側)ダーク
+wall(7.28,10.92,10.01,10.92,F2,H2+PAR,wall2Out,.2,t2);        // 南返し(コーナー)ダーク
+/* 東面(ダーク): バルコニー開口(z6.6-9.8)を挟んで分割 */
 wall(10.01,0,10.01,6.6,F2,H2+PAR,wall2Out,.2,t2);
 wall(10.01,9.8,10.01,10.92,F2,H2+PAR,wall2Out,.2,t2);
 wall(10.01,6.6,10.01,9.8,F2,1.0,wall2Out,.2,t2);              // 手すり壁
 wall(10.01,6.6,10.01,9.8,F2+2.4,H2+PAR-2.4,wall2Out,.2,t2);   // 垂れ壁+パラペット
 wall(10.01,6.55,10.01,9.85,F2+.96,.1,copingMat,.3,t2);        // 手すり笠木
 wall(10.01,6.55,10.01,9.85,F2+2.36,.1,copingMat,.24,t2);      // 開口上枠
-const EXT2F=[...EXT2,[10.01,0,10.01,10.92]];
-/* 1F/2F見切り(黒) */
-EXT2F.forEach(s=>wall(s[0],s[1],s[2],s[3],F2-.04,.18,copingMat,.24,t2));
-/* パラペット笠木(黒) */
-EXT2F.forEach(s=>wall(s[0],s[1],s[2],s[3],TOP+PAR-.12,.16,copingMat,.3,t2));
+/* 1F/2F見切り(黒)はダーク面のみ(白面は白一体・実施パース準拠) */
+[[3.64,0,10.01,0],[7.28,10.92,10.01,10.92],[10.01,0,10.01,10.92]].forEach(s=>wall(s[0],s[1],s[2],s[3],F2-.04,.18,copingMat,.24,t2));
+/* パラペット笠木(黒)は全周 */
+[...EXT2W,[3.64,0,10.01,0],[7.28,10.92,10.01,10.92],[10.01,0,10.01,10.92]].forEach(s=>wall(s[0],s[1],s[2],s[3],TOP+PAR-.12,.16,copingMat,.3,t2));
+/* 北西コーナーの立ち上がりパラペット(三角フィン・実施パース) */
+{
+  const L=2.3, hp=1.1;                       // 南へ2.3mで通常高さへ戻る・頂部+1.1m
+  const s=new THREE.Shape();
+  s.moveTo(0,0);s.lineTo(L,0);s.lineTo(0,hp);s.closePath();
+  const g=new THREE.ExtrudeGeometry(s,{depth:.2,bevelEnabled:false});
+  const m=new THREE.Mesh(g,wallOut);
+  m.rotation.y=-Math.PI/2;                   // 形状x→+z(南), 押し出し→-x(外側)
+  m.position.set(P(0,.91)[0]+.1,TOP+PAR-.04,P(0,.91)[1]);
+  m.castShadow=m.receiveShadow=true;t2.add(m);
+  /* 斜め笠木 */
+  const Lh=Math.hypot(L,hp);
+  const cop=mesh(B(.3,.12,Lh+.1),copingMat,P(0,.91)[0],TOP+PAR-.04+hp/2,P(0,.91)[1]+L/2,t2);
+  cop.rotation.x=Math.atan2(hp,L);
+  /* 頂部側の縦笠木 */
+  mesh(B(.3,hp+.1,.12),copingMat,P(0,.91)[0],TOP+PAR-.04+hp/2,P(0,.91)[1]-.02,t2).castShadow=false;
+}
 /* 幅木(外周ベース・濃色) */
 EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,.24,bandMat,.26,t1));
 /* 斜め面の見切り・柱 */
@@ -334,7 +361,14 @@ winPane(4.9,0,F2+.95,1.2,1.2,0,t2,-1);              // 2F トイレ
   for(let i=0;i<3;i++)mesh(B(.8,.05,.04),bandMat,0,-.3+i*.3,-.07,lg).castShadow=false;
   /* 横スリット(勝手口上) */
   winPane(0,2.75,FT+2.9,1.3,.5,Math.PI/2,t1,-1);
+  /* 勝手口前のタイルパッド(実施パース) */
+  flat(1.3,1.5,WWX-.75,dz,approachMat,.04);
 }
+/* 西面2F: 小角窓ペア(北寄り・高め)+引違い窓(実施パース準拠) */
+winPane(0,1.30,F2+1.95,.4,.5,Math.PI/2,t2);
+winPane(0,1.80,F2+1.95,.4,.5,Math.PI/2,t2);
+winPane(0,3.15,F2+1.3,.9,1.2,Math.PI/2,t2,-1);
+winPane(0,4.05,F2+1.3,.85,1.2,Math.PI/2,t2,-1);
 /* ===== 東面ファサード(正面): 倉庫大開口・縦格子エントランス ===== */
 const EWX=P(10.01,0)[0]+.11;            // 東壁 外面x
 /* 倉庫: 4枚建てガラス大開口 + 欄間(立面図準拠) */
@@ -398,8 +432,8 @@ winPane(10.01,5.85,F2+1.0,1.1,1.1,Math.PI/2,t2,1);   // 2F 正方形窓
   lp.rotation.y=Math.PI/2;lp.castShadow=false;
   const pl=new THREE.PointLight(0xffe6b8,6,7,2);
   pl.position.set(EWX+.8,FT+2.6,dz);t1.add(pl);inLights.push(pl);
-  /* アプローチ舗装 + 誘導ライン */
-  flat(3.4,2.2,EWX+2.0,dz,floorEnt,.04);
+  /* アプローチ舗装(タイル) + 誘導ライン */
+  flat(3.4,2.2,EWX+2.0,dz,approachMat,.04);
   flat(3.4,.12,EWX+2.0,dz+.95,M({color:0xd8c25a,roughness:.8}),.05);
 }
 /* 東面 社名サイン(添付ロゴ・2F壁面) */
@@ -430,10 +464,7 @@ winPane(10.01,5.85,F2+1.0,1.1,1.1,Math.PI/2,t2,1);   // 2F 正方形窓
   g.computeVertexNormals();
   const m=new THREE.Mesh(g,M({color:0x212428,roughness:.8}));
   m.castShadow=m.receiveShadow=true;tR.add(m);
-  /* 屋上設備(勾配に合わせた高さ) */
-  const rY=px=>TOP+.55+(P(px,0)[0]+5)*slope;
-  mesh(B(1.5,.75,.8),M({color:0x9aa0a6,roughness:.7}),P(8.5,1.6)[0],rY(8.5)+.38,P(8.5,1.6)[1],tR);
-  mesh(B(1.0,.65,.7),M({color:0x9aa0a6,roughness:.7}),P(6.2,1.3)[0],rY(6.2)+.33,P(6.2,1.3)[1],tR);
+  /* 屋上設備は実施パースに無いため撤去 */
 }
 tR.visible=false;
 /* 雨樋(西=低い側) */
