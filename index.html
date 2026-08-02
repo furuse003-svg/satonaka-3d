@@ -288,20 +288,19 @@ function winPane(px,pz,y,w,h,ry=0,parent=t1,hood=0){
 /* ============ 外壁(斜め面は開放カットアウェイ) ============ */
 const EXT1=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[3.64,0,10.01,0],[10.01,0,10.01,10.92],[7.28,10.92,10.01,10.92],[0,.91,0,4.55]];
 EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,H1,wallOut,.2,t1));
-/* 2F: ダーク外壁は正面(東)+南返しのみ、他の面は白(実施パース準拠) */
-const EXT2W=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[0,.91,0,4.55],[7.28,10.92,10.01,10.92]]; // 白(裏側: 切欠き・西・南返し)
+/* 2F: ツートーンは道路側2面(北=玄関ファサード/東=ルーバーファサード)のみ。裏側は白 */
+const EXT2W=[[0,.91,3.64,.91],[3.64,.91,3.64,0],[0,.91,0,4.55],[7.28,10.92,10.01,10.92]]; // 白(切欠き・西・南返し)
 EXT2W.forEach(s=>wall(s[0],s[1],s[2],s[3],F2,H2+PAR,wallOut,.2,t2));
-/* 東面(玄関ファサード)ダーク一枚 */
-wall(10.01,0,10.01,10.92,F2,H2+PAR,wall2Out,.2,t2);
-/* 北面(道路側)ダーク: バルコニー風欠き込み(x7.0-9.2)を挟んで分割 — 実施パース再現 */
-wall(3.64,0,7.0,0,F2,H2+PAR,wall2Out,.2,t2);
-wall(9.2,0,10.01,0,F2,H2+PAR,wall2Out,.2,t2);
-wall(7.0,0,9.2,0,F2,1.0,wall2Out,.2,t2);                      // 手すり壁
-wall(7.0,0,9.2,0,F2+2.4,H2+PAR-2.4,wall2Out,.2,t2);           // 垂れ壁+パラペット
-wall(6.95,0,9.25,0,F2+.96,.1,copingMat,.3,t2);                // 手すり笠木
-wall(6.95,0,9.25,0,F2+2.36,.1,copingMat,.24,t2);              // 開口上枠
-wall(7.0,.3,9.2,.3,F2+.9,1.6,M({color:0x191b1e,roughness:.92}),.06,t2); // 奥の暗幕板
-wall(7.0,-.14,9.2,-.14,F2+1.42,.07,copingMat,.06,t2);         // 手すりバー
+/* 北面(玄関ファサード)ダーク一枚 */
+wall(3.64,0,10.01,0,F2,H2+PAR,wall2Out,.2,t2);
+/* 東面(ルーバーファサード)ダーク: バルコニー欠き込み(z6.6-9.8)を挟んで分割 */
+wall(10.01,0,10.01,6.6,F2,H2+PAR,wall2Out,.2,t2);
+wall(10.01,9.8,10.01,10.92,F2,H2+PAR,wall2Out,.2,t2);
+wall(10.01,6.6,10.01,9.8,F2,1.0,wall2Out,.2,t2);              // 手すり壁
+wall(10.01,6.6,10.01,9.8,F2+2.4,H2+PAR-2.4,wall2Out,.2,t2);   // 垂れ壁+パラペット
+wall(10.01,6.55,10.01,9.85,F2+.96,.1,copingMat,.3,t2);        // 手すり笠木
+wall(10.01,6.55,10.01,9.85,F2+2.36,.1,copingMat,.24,t2);      // 開口上枠
+wall(10.15,6.6,10.15,9.8,F2+1.42,.07,copingMat,.06,t2);       // 手すりバー
 /* 1F/2F見切り(黒)はダーク面のみ(白面は白一体・実施パース準拠) */
 [[3.64,0,10.01,0],[10.01,0,10.01,10.92]].forEach(s=>wall(s[0],s[1],s[2],s[3],F2-.04,.18,copingMat,.24,t2));
 /* パラペット笠木(黒)は全周 */
@@ -342,12 +341,15 @@ EXT1.forEach(s=>wall(s[0],s[1],s[2],s[3],FT,.24,bandMat,.26,t1));
     mesh(B(.24,H2,.24),M({color:0x3d3c3a,roughness:.8}),dx0+(dx1-dx0)*t,F2+H2/2,dz0+(dz1-dz0)*t,t2);
   }
 }
-/* ===== 窓(立面図準拠) ===== */
-/* 手前(z=0/0.91)面: 引違い窓 上下2組(水切り庇付き) */
-winPane(2.3,.91,FT+1.4,1.2,1.4,0,t1,-1);            // 1F トイレ・洗面側
-winPane(4.9,0,FT+1.4,1.2,1.4,0,t1,-1);              // 1F 階段室
-winPane(2.3,.91,F2+.95,1.2,1.2,0,t2,-1);            // 2F 給湯室
-winPane(4.9,0,F2+.95,1.2,1.2,0,t2,-1);              // 2F トイレ
+/* ===== 窓(実施パース準拠) ===== */
+/* 切欠き面(z=.91): 2F小角窓ペア(高め) */
+winPane(1.6,.91,F2+1.9,.4,.5,0,t2);
+winPane(2.1,.91,F2+1.9,.4,.5,0,t2);
+/* 北面1F: 幅広欄間窓2つ(高め・玄関ファサード) */
+winPane(4.35,0,FT+3.0,1.3,.55,0,t1,-1);
+winPane(5.7,0,FT+3.0,1.4,.55,0,t1,-1);
+/* 北面2F: 引違い窓(黒庇付き) */
+winPane(4.9,0,F2+.95,1.2,1.2,0,t2,-1);
 /* 西面: 勝手口ドア + 面格子窓 + 横スリット(立面図準拠) */
 {
   const WWX=P(0,0)[0]-.11;
@@ -367,72 +369,63 @@ winPane(4.9,0,F2+.95,1.2,1.2,0,t2,-1);              // 2F トイレ
   /* 勝手口前のタイルパッド(実施パース) */
   flat(1.3,1.5,WWX-.75,dz,approachMat,.04);
 }
-/* 西面2F: 小角窓ペア(北寄り・高め)+引違い窓(実施パース準拠) */
-winPane(0,1.30,F2+1.95,.4,.5,Math.PI/2,t2);
-winPane(0,1.80,F2+1.95,.4,.5,Math.PI/2,t2);
+/* 西面2F: 引違い窓2組(白面・黒庇付き=実施パースの南西面) */
 winPane(0,3.15,F2+1.3,.9,1.2,Math.PI/2,t2,-1);
 winPane(0,4.05,F2+1.3,.85,1.2,Math.PI/2,t2,-1);
-/* ===== 東面ファサード(正面): 倉庫大開口・縦格子エントランス ===== */
+/* ===== 東面(ルーバーファサード): バルコニー下に大型ガラス2連 ===== */
 const EWX=P(10.01,0)[0]+.11;            // 東壁 外面x
-/* 倉庫: 4枚建てガラス大開口 + 欄間(立面図準拠) */
-{
-  const [x,z]=P(10.01,2.3);
+/* 1F: 大型ガラス2連(黒枠・実施パースのルーバー面) */
+[[6.65],[8.65]].forEach(([pz])=>{
+  const [x,z]=P(10.01,pz);
   const g=new THREE.Group();g.position.set(EWX,0,z);g.rotation.y=Math.PI/2;t1.add(g);
-  mesh(B(3.3,3.0,.1),bandMat,0,FT+1.6,0,g).castShadow=false;          // 外枠
-  const gl=mesh(B(3.14,2.5,.12),glassMat,0,FT+1.35,0,g);gl.castShadow=false;
-  for(let i=1;i<4;i++)mesh(B(.06,2.5,.14),bandMat,-1.57+i*.785,FT+1.35,0,g).castShadow=false;
-  mesh(B(3.14,.06,.14),bandMat,0,FT+2.62,0,g).castShadow=false;
-  const rm=mesh(B(3.14,.6,.12),glassMat,0,FT+2.96,0,g);rm.castShadow=false; // 欄間(2枚)
-  mesh(B(.06,.6,.14),bandMat,0,FT+2.96,0,g).castShadow=false;
-  /* 土間前のスロープ */
-  const sl=mesh(B(.9,.08,3.4),M({color:0xb9bdc1,roughness:.9}),EWX+.5,.2,z,t1);
-  sl.rotation.z=-.16;sl.castShadow=false;
-}
-/* 東2F: 引違い窓2組(黒庇付き・実施パース準拠) */
-winPane(10.01,2.6,F2+1.05,1.7,1.15,Math.PI/2,t2,1);
-winPane(10.01,5.3,F2+1.05,1.7,1.15,Math.PI/2,t2,1);
-/* 北2F: 引違い窓(トイレ窓4.9に加えて階段室側) */
+  mesh(B(1.5,2.95,.1),bandMat,0,FT+1.55,0,g).castShadow=false;
+  const gl=mesh(B(1.36,2.8,.12),glassMat,0,FT+1.55,0,g);gl.castShadow=false;
+  mesh(B(.05,2.8,.13),bandMat,0,FT+1.55,0,g).castShadow=false;
+});
+/* 東2F: 引違い窓2組(黒庇付き・欠き込みの北側) */
+winPane(10.01,2.5,F2+1.05,1.6,1.15,Math.PI/2,t2,1);
+winPane(10.01,4.8,F2+1.05,1.5,1.15,Math.PI/2,t2,1);
+/* 北2F: 引違い窓(黒庇付き・玄関ファサード2つ目) */
 winPane(6.3,0,F2+.95,1.2,1.2,0,t2,-1);
-/* 北1F: 大型ガラス(倉庫前ショーウィンドウ・実施パース準拠) */
+/* 北1F: 大型ショーウィンドウ(玄関ファサード東端・コーナー際) */
 {
-  const [x,z]=P(8.6,0);
+  const [x,z]=P(8.9,0);
   const g=new THREE.Group();g.position.set(x,0,z-.11);t1.add(g);
   mesh(B(2.0,2.9,.1),bandMat,0,FT+1.55,0,g).castShadow=false;
   const gl=mesh(B(1.86,2.76,.12),glassMat,0,FT+1.55,0,g);gl.castShadow=false;
   mesh(B(.05,2.76,.13),bandMat,0,FT+1.55,0,g).castShadow=false;
 }
-/* ===== エントランス(東・黒ドア+庇)+北東コーナー縦格子 実施パース準拠 ===== */
+/* ===== 玄関(北面・黒ドア+庇)+南東コーナー縦格子 実施パース準拠 ===== */
 {
   const blackSlat=M({color:0x26292d,roughness:.6,metalness:.15});
-  /* コーナー縦格子(北東角): 2F全高+1F中間まで垂れる(実施パース) */
-  const NZ=P(0,0)[1]-.21;
-  for(let px=9.35;px<=9.96;px+=.16){
-    const wx=P(px,0)[0];
-    mesh(B(.07,H1-1.6,.09),blackSlat,wx,FT+1.6+(H1-1.6)/2,NZ,t1).castShadow=false;   // 1F側
-    mesh(B(.07,H2+PAR-.15,.09),blackSlat,wx,F2+(H2+PAR-.15)/2,NZ,t2).castShadow=false; // 2F側
+  /* コーナー縦格子(南東角=ルーバーファサード端): 2F全高+1F中間まで垂れる */
+  for(let pz=10.05;pz<=10.86;pz+=.16){
+    const wz=P(10.01,pz)[1];
+    mesh(B(.09,H1-1.6,.07),blackSlat,EWX+.10,FT+1.6+(H1-1.6)/2,wz,t1).castShadow=false;   // 1F側
+    mesh(B(.09,H2+PAR-.15,.07),blackSlat,EWX+.10,F2+(H2+PAR-.15)/2,wz,t2).castShadow=false; // 2F側
   }
-  /* 玄関ドア(黒・縦スリットガラス) z6.5-7.5 */
-  const dz=P(10.01,7.0)[1];
-  const dg=new THREE.Group();dg.position.set(EWX+.02,0,dz);dg.rotation.y=Math.PI/2;t1.add(dg);
+  /* 玄関ドア(黒・縦スリットガラス) 北面 x6.55-7.75 */
+  const NZO=P(0,0)[1]-.11;                 // 北壁 外面z
+  const dx=P(7.15,0)[0];
+  const dg=new THREE.Group();dg.position.set(dx,0,NZO);t1.add(dg);
   mesh(B(1.2,2.5,.06),bandMat,0,FT+1.28,0,dg).castShadow=false;        // 開口枠
-  const dr=mesh(B(1.0,2.4,.09),M({color:0x1d2023,roughness:.5,metalness:.25}),0,FT+1.25,.03,dg);
-  const ds=mesh(B(.16,1.9,.05),glassMat,-.1,FT+1.3,.09,dg);ds.castShadow=false; // 縦スリットガラス
-  mesh(B(.05,.9,.07),M({color:0xd8dcdf,roughness:.3,metalness:.7}),.42,FT+1.25,.13,dg).castShadow=false; // ハンドル
-  /* ドア上の横スリット + エントランス南側の横スリット(立面図) */
-  winPane(10.01,7.0,FT+3.15,1.35,.55,Math.PI/2,t1,1);
-  winPane(10.01,9.1,FT+3.15,1.6,.55,Math.PI/2,t1,1);
+  const dr=mesh(B(1.0,2.4,.09),M({color:0x1d2023,roughness:.5,metalness:.25}),0,FT+1.25,-.03,dg);
+  const ds=mesh(B(.16,1.9,.05),glassMat,-.1,FT+1.3,-.09,dg);ds.castShadow=false; // 縦スリットガラス
+  mesh(B(.05,.9,.07),M({color:0xd8dcdf,roughness:.3,metalness:.7}),.42,FT+1.25,-.13,dg).castShadow=false; // ハンドル
+  /* ドア上の欄間 */
+  winPane(7.15,0,FT+3.15,1.35,.55,0,t1,-1);
   /* 庇(黒・軒天も黒) */
-  const cv=mesh(B(1.6,.14,2.4),copingMat,EWX+.8,FT+3.0,dz,t1);
-  const sof=flat(1.5,2.3,EWX+.8,dz,M({color:0x2a2d31,roughness:.7}),0,t1);
-  sof.position.y=FT+2.92;sof.rotation.x=Math.PI/2;
+  mesh(B(2.0,.12,1.3),copingMat,dx,FT+3.0,NZO-.55,t1);
+  const sof=flat(1.9,1.2,dx,NZO-.55,M({color:0x2a2d31,roughness:.7}),0,t1);
+  sof.position.y=FT+2.93;sof.rotation.x=Math.PI/2;
   /* ロゴ銘板(ドア横) + ポーチ照明 */
-  const lp=mesh(B(.05,.4,1.5),logoMatH,EWX+.13,FT+1.7,P(10.01,8.6)[1],t1);
-  lp.rotation.y=Math.PI/2;lp.castShadow=false;
+  const lp=mesh(B(1.2,.32,.05),logoMatH,P(5.85,0)[0],FT+1.7,NZO-.02,t1);
+  lp.castShadow=false;
   const pl=new THREE.PointLight(0xffe6b8,6,7,2);
-  pl.position.set(EWX+.8,FT+2.6,dz);t1.add(pl);inLights.push(pl);
-  /* アプローチ舗装(タイル) + 誘導ライン */
-  flat(3.4,2.2,EWX+2.0,dz,approachMat,.04);
-  flat(3.4,.12,EWX+2.0,dz+.95,M({color:0xd8c25a,roughness:.8}),.05);
+  pl.position.set(dx,FT+2.6,NZO-.8);t1.add(pl);inLights.push(pl);
+  /* アプローチ舗装(タイル): ドア前パッド + コーナー大判アプローチ */
+  flat(2.0,1.6,dx,NZO-.95,approachMat,.04);
+  flat(3.2,2.4,P(9.2,0)[0],NZO-1.35,approachMat,.04);
 }
 /* 東面 社名サイン(添付ロゴ・2F壁面) */
 {
@@ -470,8 +463,8 @@ tR.visible=false;
   const [x,z]=P(px,pz);
   mesh(new THREE.CylinderGeometry(.045,.045,TOP-.4,8),M({color:0x35383c,roughness:.6}),x-.14,(TOP-.4)/2+.2,z,t1).castShadow=false;
 });
-/* 室外機(北側) */
-[[6.9,-.42],[8.1,-.42]].forEach(([px,pz])=>{
+/* 室外機(西側・勝手口脇) */
+[[-.45,1.35],[-.45,4.1]].forEach(([px,pz])=>{
   const [x,z]=P(px,pz);
   const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
   mesh(B(.9,.72,.34),M({color:0xe8eaec,roughness:.6}),0,.4,0,g);
