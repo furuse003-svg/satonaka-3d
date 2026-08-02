@@ -436,29 +436,18 @@ winPane(10.01,4.6,F2+1.52,1.5,1.15,Math.PI/2,t2,1);
   sg.rotation.y=Math.PI/2;sg.castShadow=false;
 }
 
-/* ============ 屋根(トグル・片流れ: 東高→西低, バルコニー欠込) ============ */
+/* ============ 屋根(トグル・全面フラット緩勾配: 東高→西低・欠けなし・実施パース準拠) ============ */
 {
-  const RFP=[[0,.91],[3.64,.91],[3.64,0],[10.01,0],[10.01,6.37],[8.19,6.37],[8.19,10.92],[7.28,10.92],[0,4.55]];
-  const cx=5.0,cz=4.7,OUT=.3;
-  const s=new THREE.Shape();
-  RFP.forEach((p,i)=>{
-    let px=p[0],pz=p[1];
-    const dx=px-cx,dz=pz-cz,L=Math.hypot(dx,dz);
-    px+=dx/L*OUT;pz+=dz/L*OUT;
-    const [mx,mz]=P(px,pz);
-    i?s.lineTo(mx,mz):s.moveTo(mx,mz);
-  });
-  s.closePath();
-  const g=new THREE.ExtrudeGeometry(s,{depth:.2,bevelEnabled:false});
-  g.rotateX(Math.PI/2);g.translate(0,TOP+.35,0);
-  /* シアーで片流れ勾配(東+xほど高く) */
+  const s=footShape(.04);                                   // 全平面をカバー(バルコニー欠込なし)
+  const g=new THREE.ExtrudeGeometry(s,{depth:.15,bevelEnabled:false});
+  g.rotateX(Math.PI/2);g.translate(0,TOP+.05,0);
+  /* 緩い片流れ(東=ロゴ面側が高く、パラペット天端とほぼ面一で隙間なし) */
   const pos=g.attributes.position;
-  const slope=1.4/10.01;
+  const slope=.55/10.01;
   for(let i=0;i<pos.count;i++)pos.setY(i,pos.getY(i)+(pos.getX(i)+5)*slope);
   g.computeVertexNormals();
   const m=new THREE.Mesh(g,M({color:0x212428,roughness:.8}));
   m.castShadow=m.receiveShadow=true;tR.add(m);
-  /* 屋上設備は実施パースに無いため撤去 */
 }
 tR.visible=false;
 /* 雨樋(西=低い側) */
