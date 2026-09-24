@@ -80,9 +80,31 @@ controls.minDistance=7;
 controls.maxDistance=80;
 controls.maxPolarAngle=Math.PI/2-.04;
 window.__dbg={camera,controls,renderer,scene};
+
+/* ============ 埋め込み用URLパラメータ ============
+   cam=x,y,z     カメラ位置        target=x,y,z  注視点
+   rotate=0      自動回転オフ      ui=0          タイトル・ボタン非表示
+   roof=1        屋根あり          night=1       夜モード
+   mode=explode  フロア分解
+   現在の見え方を取り出す: ブラウザのコンソールで getView() を実行 */
+const Q=new URLSearchParams(location.search);
+const qv=k=>{const v=Q.get(k);if(!v)return null;const a=v.split(',').map(Number);return a.length===3&&a.every(Number.isFinite)?a:null;};
+const qCam=qv('cam'),qTgt=qv('target');
+if(qCam)camera.position.set(qCam[0],qCam[1],qCam[2]);
+if(qTgt)controls.target.set(qTgt[0],qTgt[1],qTgt[2]);
+const autoRot=Q.get('rotate')!=='0';
+controls.autoRotate=autoRot;
+window.getView=()=>{
+  const r=v=>Math.round(v*100)/100;
+  const s=`cam=${r(camera.position.x)},${r(camera.position.y)},${r(camera.position.z)}&target=${r(controls.target.x)},${r(controls.target.y)},${r(controls.target.z)}`;
+  console.log('iframe src に付けるパラメータ:\n?'+s);
+  return s;
+};
+console.log('%c3Dパース: 見え方を固定したいときはコンソールで getView() を実行してください','color:#2b3f55');
+
 let idleTimer=null;
 controls.addEventListener('start',()=>{controls.autoRotate=false;clearTimeout(idleTimer);});
-controls.addEventListener('end',()=>{clearTimeout(idleTimer);idleTimer=setTimeout(()=>controls.autoRotate=true,7000);});
+controls.addEventListener('end',()=>{clearTimeout(idleTimer);idleTimer=setTimeout(()=>controls.autoRotate=autoRot,7000);});
 
 const hemi=new THREE.HemisphereLight(0xdcebff,0x9aa08e,.95);scene.add(hemi);
 const amb=new THREE.AmbientLight(0xdfe8f0,.34);scene.add(amb);
@@ -891,6 +913,11 @@ function setMode(t){
 }
 btnWh.addEventListener('click',()=>{setMode(0);btnWh.classList.add('active');btnEx.classList.remove('active');});
 btnEx.addEventListener('click',()=>{setMode(1);btnEx.classList.add('active');btnWh.classList.remove('active');});
+/* URLパラメータによる初期状態(ui / roof / night / mode) */
+if(Q.get('ui')==='0')document.querySelectorAll('.ui').forEach(e=>e.style.display='none');
+if(Q.get('roof')==='1')btnRoofOn.click();
+if(Q.get('night')==='1')btnN.click();
+if(Q.get('mode')==='explode')btnEx.click();
 
 const SUN_D=new THREE.Color(0xfff2da), SUN_N=new THREE.Color(0x8fa8d8);
 function applyNight(t){
